@@ -236,16 +236,15 @@
 //   }
 // }
 
-
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_textfield.dart';
+import '../../../data/providers/auth_provider.dart';
 import 'login_screen.dart';
-import 'reset_password_screen.dart'; // 👈 استدعاء الشاشة الجديدة التي سنصنعها
+import 'reset_password_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -261,10 +260,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   late Animation<Offset> _slideAnim;
 
   final _emailController = TextEditingController();
-  bool _isLoading = false;
-
-  // ⚠️ تنبيه: ضع عنوان IP الخاص بجهازك هنا
-  final String baseUrl = 'http://192.168.1.103:8000/api/v1/auth';
 
   @override
   void initState() {
@@ -288,7 +283,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     super.dispose();
   }
 
-  // --- دالة طلب الرمز من الخادم ---
+  // --- طلب إعادة تعيين كلمة المرور عبر AuthProvider ---
   Future<void> _requestResetCode() async {
     final email = _emailController.text.trim();
 
@@ -297,41 +292,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       return;
     }
 
-    setState(() => _isLoading = true);
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.requestPasswordReset(email: email);
 
-    try {
-      final Uri url = Uri.parse('$baseUrl/password-reset/request/');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({'email': email}),
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('تم إرسال رمز التحقق إلى بريدك!'),
+            backgroundColor: Colors.green),
       );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم إرسال رمز التحقق إلى بريدك!'), backgroundColor: Colors.green),
-          );
-          // الانتقال لشاشة تعيين كلمة المرور الجديدة وتمرير الإيميل لها
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ResetPasswordScreen(email: email),
-            ),
-          );
-        }
-      } else if (response.statusCode == 404) {
-        _showError('هذا البريد الإلكتروني غير مسجل لدينا');
-      } else {
-        _showError('حدث خطأ، يرجى المحاولة مرة أخرى');
-      }
-    } catch (e) {
-      _showError('فشل الاتصال بالخادم، تحقق من الشبكة والـ IP');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => ResetPasswordScreen(email: email)),
+      );
+    } else {
+      _showError(
+          authProvider.errorMessage ?? 'حدث خطأ، يرجى المحاولة مرة أخرى');
     }
   }
 
@@ -378,7 +356,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       "لا تقلق، أدخل بريدك الإلكتروني المسجل وسنرسل لك رمز إعادة تعيين كلمة المرور",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: isDark ? AppColors.warmBeige : const Color(0xFF5D4037),
+                        color: isDark
+                            ? AppColors.warmBeige
+                            : const Color(0xFF5D4037),
                         fontSize: 14,
                         height: 1.6,
                       ),
@@ -392,15 +372,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                     controller: _emailController,
                   ),
                   const SizedBox(height: 30),
-                  
-                  // --- ربط الزر بالدالة ---
-                  _isLoading
-                      ? const CircularProgressIndicator(color: AppColors.goldenBronze)
-                      : CustomButton(
-                          text: "إرسال رمز التحقق",
-                          onPressed: _requestResetCode,
-                          icon: Icons.send_rounded,
-                        ),
+
+                  // --- زر إرسال الرمز ---
+                  Consumer<AuthProvider>(
+                    builder: (context, auth, _) => auth.isLoading
+                        ? const CircularProgressIndicator(
+                            color: AppColors.goldenBronze)
+                        : CustomButton(
+                            text: "إرسال رمز التحقق",
+                            onPressed: _requestResetCode,
+                            icon: Icons.send_rounded,
+                          ),
+                  ),
                   const SizedBox(height: 40),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -416,7 +399,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                         onPressed: () {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                            MaterialPageRoute(
+                                builder: (_) => const LoginScreen()),
                           );
                         },
                         child: const Text(
@@ -452,10 +436,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               color: isDark ? AppColors.pureWhite : AppColors.deepNavy,
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
-                BoxShadow(color: (isDark ? Colors.black : AppColors.deepNavy).withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 3))
+                BoxShadow(
+                    color: (isDark ? Colors.black : AppColors.deepNavy)
+                        .withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3))
               ],
             ),
-            child: Icon(isDark ? Icons.wb_sunny_rounded : Icons.nightlight_round, size: 20, color: AppColors.goldenBronze),
+            child: Icon(
+                isDark ? Icons.wb_sunny_rounded : Icons.nightlight_round,
+                size: 20,
+                color: AppColors.goldenBronze),
           ),
         ),
         GestureDetector(
@@ -466,9 +457,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF072A38) : AppColors.pureWhite,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? AppColors.goldenBronze.withOpacity(0.3) : Colors.grey.shade300),
+              border: Border.all(
+                  color: isDark
+                      ? AppColors.goldenBronze.withOpacity(0.3)
+                      : Colors.grey.shade300),
             ),
-            child: Icon(Icons.arrow_forward_ios_rounded, size: 18, color: isDark ? AppColors.pureWhite : AppColors.deepNavy),
+            child: Icon(Icons.arrow_forward_ios_rounded,
+                size: 18,
+                color: isDark ? AppColors.pureWhite : AppColors.deepNavy),
           ),
         ),
       ],
@@ -480,11 +476,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       width: 110,
       height: 110,
       decoration: BoxDecoration(
-        color: isDark ? AppColors.goldenBronze.withOpacity(0.08) : AppColors.goldenBronze.withOpacity(0.06),
+        color: isDark
+            ? AppColors.goldenBronze.withOpacity(0.08)
+            : AppColors.goldenBronze.withOpacity(0.06),
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.goldenBronze.withOpacity(0.2), width: 1.5),
+        border: Border.all(
+            color: AppColors.goldenBronze.withOpacity(0.2), width: 1.5),
       ),
-      child: const Icon(Icons.lock_reset_rounded, size: 50, color: AppColors.goldenBronze),
+      child: const Icon(Icons.lock_reset_rounded,
+          size: 50, color: AppColors.goldenBronze),
     );
   }
 }

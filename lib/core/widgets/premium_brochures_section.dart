@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import '../network/api_service.dart';
+import '../network/api_constants.dart';
 import '../theme/app_colors.dart';
 import '../../presentation/screens/details/offer_details_screen.dart';
 
+// ============================================================================
+// كتيبات العروض — تجلب من API
+// ============================================================================
 class FocusedBrochuresSection extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback? onSeeAllTap;
@@ -17,8 +22,13 @@ class FocusedBrochuresSection extends StatefulWidget {
 class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
   final PageController _pageController =
       PageController(viewportFraction: 0.55, initialPage: 1);
+  final ApiService _api = ApiService();
 
-  final List<Map<String, dynamic>> brochures = [
+  List<Map<String, dynamic>> _brochures = [];
+  bool _isLoading = true;
+
+  // كتيبات احتياطية
+  static final List<Map<String, dynamic>> _fallbackBrochures = [
     {
       "title": "عروض التوفير الأسبوعية",
       "store": "هايبر بنده",
@@ -46,6 +56,60 @@ class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _fetchBrochures();
+  }
+
+  Future<void> _fetchBrochures() async {
+    try {
+      final data = await _api.get(
+        ApiConstants.productGroups,
+        queryParams: {'type': 'brochure', 'page_size': '6'},
+        requiresAuth: false,
+      );
+
+      final List rawBrochures =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      if (rawBrochures.isNotEmpty && mounted) {
+        setState(() {
+          _brochures = rawBrochures.map<Map<String, dynamic>>((b) {
+            String storeName = b['store_name']?.toString() ?? 'متجر';
+            return {
+              "id": b['id']?.toString() ?? '',
+              "title": b['title']?.toString() ?? 'كتيب عروض',
+              "store": storeName,
+              "logo": b['store_logo'] != null
+                  ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
+                  : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff',
+              "image": ApiConstants.resolveImageUrl(
+                  b['image']?.toString() ?? b['cover_image']?.toString()),
+              "pages": b['pages_count'] ?? b['products_count'] ?? 0,
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        if (mounted) {
+          setState(() {
+            _brochures = List.from(_fallbackBrochures);
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('خطأ في جلب الكتيبات: $e');
+      if (mounted) {
+        setState(() {
+          _brochures = List.from(_fallbackBrochures);
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
@@ -55,6 +119,8 @@ class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
   Widget build(BuildContext context) {
     final Color textColor =
         widget.isDarkMode ? AppColors.pureWhite : AppColors.lightText;
+
+    if (!_isLoading && _brochures.isEmpty) return const SizedBox.shrink();
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -91,33 +157,50 @@ class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
           ),
           SizedBox(
             height: 330,
-            child: PageView.builder(
-              controller: _pageController,
-              physics: const BouncingScrollPhysics(),
-              itemCount: brochures.length,
-              itemBuilder: (context, index) {
-                return AnimatedBuilder(
-                  animation: _pageController,
-                  builder: (context, child) {
-                    double value = 1.0;
-                    if (_pageController.position.haveDimensions) {
-                      value = _pageController.page! - index;
-                      value = (1 - (value.abs() * 0.15)).clamp(0.0, 1.0);
-                    } else {
-                      value = (index == 1) ? 1.0 : 0.85;
-                    }
-                    return Transform.scale(
-                      scale: Curves.easeOut.transform(value),
-                      child:
-                          Opacity(opacity: value.clamp(0.5, 1.0), child: child),
-                    );
-                  },
-                  child: _buildBrochureCard(brochures[index]),
-                );
-              },
-            ),
+            child: _isLoading
+                ? _buildLoadingShimmer()
+                : PageView.builder(
+                    controller: _pageController,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: _brochures.length,
+                    itemBuilder: (context, index) {
+                      return AnimatedBuilder(
+                        animation: _pageController,
+                        builder: (context, child) {
+                          double value = 1.0;
+                          if (_pageController.position.haveDimensions) {
+                            value = _pageController.page! - index;
+                            value = (1 - (value.abs() * 0.15)).clamp(0.0, 1.0);
+                          } else {
+                            value = (index == 1) ? 1.0 : 0.85;
+                          }
+                          return Transform.scale(
+                            scale: Curves.easeOut.transform(value),
+                            child: Opacity(
+                                opacity: value.clamp(0.5, 1.0), child: child),
+                          );
+                        },
+                        child: _buildBrochureCard(_brochures[index]),
+                      );
+                    },
+                  ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingShimmer() {
+    final Color cardColor =
+        widget.isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
+    return Center(
+      child: Container(
+        width: 200,
+        margin: const EdgeInsets.symmetric(vertical: 15),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
       ),
     );
   }
@@ -154,7 +237,12 @@ class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.network(brochure["image"], fit: BoxFit.cover),
+                Image.network(brochure["image"],
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.lightBackground,
+                        child: const Icon(Icons.menu_book_rounded,
+                            color: AppColors.grey, size: 40))),
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

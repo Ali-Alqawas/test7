@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
-import '../../../data/dummy_data.dart';
+import '../../../data/providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
 import 'saved_addresses_screen.dart';
 import 'security_screen.dart';
@@ -13,6 +14,7 @@ import 'merchant_upgrade_screen.dart';
 import 'support_center_screen.dart';
 import 'legal_screen.dart';
 import 'notifications_settings_screen.dart';
+import '../auth/login_screen.dart';
 
 // ============================================================================
 // شاشة الحساب / البروفايل (Profile Screen) — التصميم الجديد
@@ -257,16 +259,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   blurRadius: 10)
             ],
           ),
-          child: const CircleAvatar(
+          child: CircleAvatar(
               radius: 35,
               backgroundColor: AppColors.softCream,
-              backgroundImage: NetworkImage(AppData.userImage)),
+              backgroundImage:
+                  NetworkImage(context.watch<AuthProvider>().userImage)),
         ),
         const SizedBox(width: 16),
         Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(AppData.userName,
+          Text(context.watch<AuthProvider>().userName,
               style: TextStyle(
                   color: textC, fontSize: 22, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
@@ -274,7 +277,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Icon(Icons.location_on_outlined,
                 color: AppColors.goldenBronze, size: 14),
             const SizedBox(width: 4),
-            Text(AppData.userLocation,
+            Text(
+                context.watch<AuthProvider>().userProfile?['location'] ??
+                    'موقع غير محدد',
                 style: TextStyle(
                     color:
                         isDark ? AppColors.warmBeige : AppColors.goldenBronze,
@@ -315,7 +320,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             "المفضلة", "23", Icons.favorite_border_rounded, isDark, textC),
         _buildDivider(isDark),
         _buildStatItem(
-            "نقاطي", AppData.userPoints, Icons.stars_rounded, isDark, textC),
+            "نقاطي",
+            context.watch<AuthProvider>().userProfile?['points']?.toString() ??
+                '0',
+            Icons.stars_rounded,
+            isDark,
+            textC),
       ]),
     );
   }
@@ -418,7 +428,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                     const Text("محفظة النقاط",
                         style: TextStyle(color: Colors.white70, fontSize: 12)),
-                    Text("${AppData.userPoints} نقطة",
+                    Text(
+                        "${context.watch<AuthProvider>().userProfile?['points'] ?? '0'} نقطة",
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 22,
@@ -611,7 +622,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: GestureDetector(
-        onTap: () {},
+        onTap: () async {
+          final auth = context.read<AuthProvider>();
+          await auth.logout();
+          if (!mounted) return;
+          // مسح كل الشاشات والذهاب للتسجيل
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const _LogoutLoginRedirect()),
+            (route) => false,
+          );
+        },
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -802,4 +823,12 @@ class _SettingItem {
   final VoidCallback onTap;
 
   _SettingItem(this.icon, this.title, this.subtitle, this.onTap);
+}
+
+/// Helper widget to redirect to login after logout
+class _LogoutLoginRedirect extends StatelessWidget {
+  const _LogoutLoginRedirect();
+
+  @override
+  Widget build(BuildContext context) => const LoginScreen();
 }

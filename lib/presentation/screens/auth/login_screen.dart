@@ -308,16 +308,14 @@
 //   }
 // }
 
-
-import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart'; // مكتبة الحفظ
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_textfield.dart';
+import '../../../data/providers/auth_provider.dart';
+import '../home/home_screen.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 import 'interests_screen.dart';
@@ -338,12 +336,6 @@ class _LoginScreenState extends State<LoginScreen>
   // --- جديد: وحدات التحكم لالتقاط النصوص ---
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
-  // --- جديد: حالة التحميل ---
-  bool _isLoading = false;
-
-  // ⚠️ تنبيه: تذكر تعديل الـ IP ليطابق جهازك
-  final String baseUrl = 'http://192.168.1.103:8000/api/v1/auth';
 
   @override
   void initState() {
@@ -368,7 +360,7 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  // --- جديد: دالة تسجيل الدخول ---
+  // --- تسجيل الدخول عبر AuthProvider ---
   Future<void> _loginUser() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -378,73 +370,31 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.login(email: email, password: password);
 
-    try {
-      final Uri url = Uri.parse('$baseUrl/login/');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'email': email, // الـ API يقبل إيميل أو يوزرنيم في هذا الحقل
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 15));
+    if (!mounted) return;
 
-      if (response.body.startsWith('<')) {
-        _showError('خطأ في السيرفر: تأكد من تشغيل الخادم والـ IP');
-        return;
-      }
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('تم تسجيل الدخول بنجاح!'),
+            backgroundColor: Colors.green),
+      );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      // مستخدم قديم (أكمل الاهتمامات) → الرئيسية مباشرة
+      // مستخدم جديد (لم يكمل الاهتمامات) → شاشة الاهتمامات
+      final Widget destination = authProvider.hasCompletedInterests
+          ? const HomeScreen()
+          : const InterestsScreen();
 
-      if (response.statusCode == 200) {
-        // 1. استخراج المفاتيح
-        final String accessToken = responseData['access'];
-        final String refreshToken = responseData['refresh'];
-
-        // 2. حفظ المفاتيح في ذاكرة الهاتف الدائمة
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('access_token', accessToken);
-        await prefs.setString('refresh_token', refreshToken);
-
-        debugPrint('تم الدخول وحفظ التوكن بنجاح!');
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم تسجيل الدخول بنجاح!'), backgroundColor: Colors.green),
-          );
-          
-          // 3. التوجيه للشاشة التالية
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const InterestsScreen()),
-          );
-        }
-      } else {
-        // معالجة الأخطاء بناءً على التوثيق
-        String errorMsg = 'بيانات الدخول غير صحيحة';
-        if (response.statusCode == 401) errorMsg = 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
-        if (response.statusCode == 403) errorMsg = 'عذراً، هذا الحساب محظور أو غير مفعل';
-        if (response.statusCode == 400) errorMsg = 'بيانات ناقصة، يرجى تعبئة جميع الحقول';
-        
-        _showError(responseData['detail'] ?? errorMsg);
-      }
-    } on TimeoutException {
-      _showError('انتهى وقت الاتصال. يبدو أن الإنترنت ضعيف أو الخادم لا يستجيب.');
-    } catch (e) {
-      _showError('فشل الاتصال: يرجى التحقق من الشبكة.');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => destination),
+        (route) => false, // مسح كل تاريخ التنقل
+      );
+    } else {
+      _showError(authProvider.errorMessage ?? 'فشل تسجيل الدخول');
     }
   }
 
@@ -490,7 +440,9 @@ class _LoginScreenState extends State<LoginScreen>
                   Text(
                     "أهلاً بعودتك، سجل دخولك للمتابعة",
                     style: TextStyle(
-                      color: isDark ? AppColors.warmBeige : const Color(0xFF5D4037),
+                      color: isDark
+                          ? AppColors.warmBeige
+                          : const Color(0xFF5D4037),
                       fontSize: 14,
                     ),
                   ),
@@ -533,14 +485,17 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                   const SizedBox(height: 10),
 
-                  // --- تعديل: زر الإرسال مع مؤشر التحميل ---
-                  _isLoading
-                      ? const CircularProgressIndicator(color: AppColors.goldenBronze)
-                      : CustomButton(
-                          text: "تسجيل الدخول",
-                          onPressed: _loginUser, // 👈 استدعاء دالة الدخول
-                          icon: Icons.login_rounded,
-                        ),
+                  // --- زر الإرسال مع مؤشر التحميل ---
+                  Consumer<AuthProvider>(
+                    builder: (context, auth, _) => auth.isLoading
+                        ? const CircularProgressIndicator(
+                            color: AppColors.goldenBronze)
+                        : CustomButton(
+                            text: "تسجيل الدخول",
+                            onPressed: _loginUser,
+                            icon: Icons.login_rounded,
+                          ),
+                  ),
                   const SizedBox(height: 30),
 
                   _buildDividerOr(isDark),
@@ -578,7 +533,8 @@ class _LoginScreenState extends State<LoginScreen>
                         onPressed: () {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => const SignUpScreen()),
+                            MaterialPageRoute(
+                                builder: (_) => const SignUpScreen()),
                           );
                         },
                         child: const Text(

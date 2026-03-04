@@ -331,16 +331,15 @@
 //   }
 // }
 
-
 import 'dart:async';
-import 'dart:convert'; // جديد للتعامل مع JSON
-import 'package:http/http.dart' as http; // جديد للاتصال بالخادم
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
-import 'login_screen.dart'; // 👈 تم الاستيراد للانتقال إليها بعد النجاح
+import '../../../data/providers/auth_provider.dart';
+import 'login_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
   final String email;
@@ -363,12 +362,6 @@ class _VerificationScreenState extends State<VerificationScreen>
   int _resendSeconds = 60;
   Timer? _timer;
   bool _canResend = false;
-  
-  // --- جديد: حالة التحميل للزر ---
-  bool _isLoading = false;
-
-  // ⚠️ تنبيه هام: تذكر وضع عنوان IP الخاص بجهازك العامل بنظام لينكس هنا
-  final String baseUrl = 'http://192.168.1.103:8000/api/v1/auth';
 
   @override
   void initState() {
@@ -409,115 +402,55 @@ class _VerificationScreenState extends State<VerificationScreen>
     super.dispose();
   }
 
-  // --- جديد: دالة التحقق من الخادم ---
+  // --- التحقق عبر AuthProvider ---
   Future<void> _verifyOtp() async {
-    // جمع الأرقام من الحقول الستة
     String otp = _otpControllers.map((c) => c.text).join();
 
     if (otp.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الرجاء إدخال الرمز المكون من 6 أرقام بالكامل')),
+        const SnackBar(
+            content: Text('الرجاء إدخال الرمز المكون من 6 أرقام بالكامل')),
       );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    final authProvider = context.read<AuthProvider>();
+    final success =
+        await authProvider.verifyOtp(email: widget.email, otpCode: otp);
 
-    try {
-      final Uri url = Uri.parse('$baseUrl/verify-otp/');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'email': widget.email,
-          'otp_code': otp,
-        }),
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('تم التحقق بنجاح! يمكنك الآن تسجيل الدخول'),
+            backgroundColor: Colors.green),
       );
-
-      // حماية من ردود HTML
-      if (response.body.startsWith('<')) {
-        _showError('خطأ في السيرفر: الاستجابة غير صالحة');
-        return;
-      }
-
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // تم التحقق بنجاح!
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم التحقق بنجاح! يمكنك الآن تسجيل الدخول'), backgroundColor: Colors.green),
-          );
-          
-          // يمكنك هنا حفظ الـ Token لاحقاً إذا أردت: responseData['access']
-          
-          // الانتقال لصفحة تسجيل الدخول
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-          );
-        }
-      } else {
-        // معالجة حالات الخطأ المحددة في ملف التوثيق
-        String errorMessage = 'رمز خاطئ أو منتهي الصلاحية';
-        if (response.statusCode == 404) errorMessage = 'المستخدم غير موجود';
-        if (response.statusCode == 410) errorMessage = 'الرمز منتهي الصلاحية، يرجى طلب رمز جديد';
-        if (response.statusCode == 429) errorMessage = 'تجاوزت الحد المسموح، حسابك محظور مؤقتاً';
-        
-        _showError(responseData['detail'] ?? errorMessage);
-      }
-    } catch (e) {
-      _showError('فشل الاتصال بالخادم، يرجى التحقق من الشبكة');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    } else {
+      _showError(authProvider.errorMessage ?? 'رمز خاطئ أو منتهي الصلاحية');
     }
   }
 
-  // --- جديد: دالة إعادة إرسال الرمز ---
+  // --- إعادة إرسال الرمز عبر AuthProvider ---
   Future<void> _resendOtp() async {
-    setState(() {
-      _isLoading = true;
-    });
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.resendOtp(email: widget.email);
 
-    try {
-      // ملاحظة: تأكد من اسم الـ Endpoint لإعادة الإرسال من الـ Swagger لديك
-      final Uri url = Uri.parse('$baseUrl/resend-otp/'); 
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'email': widget.email,
-        }),
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('تم إعادة إرسال الرمز بنجاح'),
+            backgroundColor: Colors.green),
       );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم إعادة إرسال الرمز بنجاح'), backgroundColor: Colors.green),
-        );
-        _startTimer(); // إعادة تشغيل العداد
-      } else {
-        _showError('فشل إعادة إرسال الرمز');
-      }
-    } catch (e) {
-      _showError('فشل الاتصال بالخادم');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      _startTimer();
+    } else {
+      _showError(authProvider.errorMessage ?? 'فشل إعادة إرسال الرمز');
     }
   }
 
@@ -561,7 +494,8 @@ class _VerificationScreenState extends State<VerificationScreen>
                 Text(
                   "أرسلنا رمز التحقق إلى",
                   style: TextStyle(
-                    color: isDark ? AppColors.warmBeige : const Color(0xFF5D4037),
+                    color:
+                        isDark ? AppColors.warmBeige : const Color(0xFF5D4037),
                     fontSize: 14,
                   ),
                 ),
@@ -578,14 +512,17 @@ class _VerificationScreenState extends State<VerificationScreen>
                 _buildOtpFields(isDark),
                 const SizedBox(height: 30),
 
-                // --- تعديل: إظهار مؤشر التحميل أثناء الاتصال ---
-                _isLoading
-                    ? const CircularProgressIndicator(color: AppColors.goldenBronze)
-                    : CustomButton(
-                        text: "تحقق",
-                        onPressed: _verifyOtp, // 👈 استدعاء دالة التحقق
-                        icon: Icons.verified_outlined,
-                      ),
+                // --- زر التحقق مع مؤشر التحميل ---
+                Consumer<AuthProvider>(
+                  builder: (context, auth, _) => auth.isLoading
+                      ? const CircularProgressIndicator(
+                          color: AppColors.goldenBronze)
+                      : CustomButton(
+                          text: "تحقق",
+                          onPressed: _verifyOtp,
+                          icon: Icons.verified_outlined,
+                        ),
+                ),
                 const SizedBox(height: 30),
                 _buildResendSection(isDark),
                 const SizedBox(height: 30),
@@ -706,7 +643,7 @@ class _VerificationScreenState extends State<VerificationScreen>
               ),
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: (value) {
-                setState(() {}); 
+                setState(() {});
                 if (value.isNotEmpty && index < 5) {
                   _focusNodes[index + 1].requestFocus();
                 } else if (value.isEmpty && index > 0) {
@@ -732,14 +669,17 @@ class _VerificationScreenState extends State<VerificationScreen>
         ),
         const SizedBox(height: 8),
         _canResend
-            ? GestureDetector(
-                onTap: _isLoading ? null : _resendOtp, // 👈 استدعاء دالة إعادة الإرسال
-                child: Text(
-                  "إعادة إرسال الرمز",
-                  style: TextStyle(
-                    color: _isLoading ? Colors.grey : AppColors.goldenBronze,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+            ? Consumer<AuthProvider>(
+                builder: (context, auth, _) => GestureDetector(
+                  onTap: auth.isLoading ? null : _resendOtp,
+                  child: Text(
+                    "إعادة إرسال الرمز",
+                    style: TextStyle(
+                      color:
+                          auth.isLoading ? Colors.grey : AppColors.goldenBronze,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
               )

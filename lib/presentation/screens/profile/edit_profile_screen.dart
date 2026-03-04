@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../data/dummy_data.dart';
+import '../../../data/providers/auth_provider.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -9,10 +10,17 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final _nameCtrl = TextEditingController(text: AppData.userName);
+  late TextEditingController _nameCtrl;
 
   final _bioCtrl = TextEditingController(text: "عاشق للتسوق الذكي 🛒");
   String _selectedGender = "ذكر";
+
+  @override
+  void initState() {
+    super.initState();
+    final auth = context.read<AuthProvider>();
+    _nameCtrl = TextEditingController(text: auth.userName);
+  }
 
   @override
   void dispose() {
@@ -77,9 +85,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               blurRadius: 15)
                         ],
                       ),
-                      child: const CircleAvatar(
+                      child: CircleAvatar(
                           radius: 50,
-                          backgroundImage: NetworkImage(AppData.userImage)),
+                          backgroundImage: NetworkImage(
+                              context.watch<AuthProvider>().userImage)),
                     ),
                     Positioned(
                       bottom: 0,

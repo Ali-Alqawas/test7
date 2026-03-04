@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../data/dummy_data.dart';
+import '../../../data/providers/auth_provider.dart';
 
 class RewardsScreen extends StatelessWidget {
   const RewardsScreen({super.key});
@@ -101,7 +102,12 @@ class RewardsScreen extends StatelessWidget {
                   const Text("رصيدك الحالي",
                       style: TextStyle(color: Colors.white70, fontSize: 13)),
                   const SizedBox(height: 8),
-                  Text(AppData.userPoints,
+                  Text(
+                      context
+                              .watch<AuthProvider>()
+                              .userProfile?['points']
+                              ?.toString() ??
+                          '0',
                       style: const TextStyle(
                           color: Colors.white,
                           fontSize: 42,

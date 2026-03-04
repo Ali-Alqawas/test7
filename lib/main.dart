@@ -268,8 +268,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
-import 'core/theme/theme_manager.dart'; // استدعاء المدير
+import 'core/theme/theme_manager.dart';
+import 'data/providers/auth_provider.dart';
 import 'presentation/screens/splash/splash_screen.dart';
 
 void main() {
@@ -284,19 +286,33 @@ class GraduationProjectApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // استخدام ValueListenableBuilder للاستماع لتغييرات الثيم فوراً
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: appThemeNotifier,
-      builder: (context, currentMode, child) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'SIDE App',
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: currentMode, // الثيم يأتي من المدير
-          home: const SplashScreen(),
-        );
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // سيتم إضافة المزيد لاحقاً:
+        // ChangeNotifierProvider(create: (_) => OffersProvider()),
+        // ChangeNotifierProvider(create: (_) => FavoritesProvider()),
+        // ChangeNotifierProvider(create: (_) => CategoriesProvider()),
+        // ChangeNotifierProvider(create: (_) => StoresProvider()),
+        // ChangeNotifierProvider(create: (_) => NotificationsProvider()),
+        // ChangeNotifierProvider(create: (_) => ProfileProvider()),
+        // ChangeNotifierProvider(create: (_) => ChatProvider()),
+        // ChangeNotifierProvider(create: (_) => RewardsProvider()),
+        // ChangeNotifierProvider(create: (_) => SupportProvider()),
+      ],
+      child: ValueListenableBuilder<ThemeMode>(
+        valueListenable: appThemeNotifier,
+        builder: (context, currentMode, child) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'SIDE App',
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: currentMode,
+            home: const SplashScreen(),
+          );
+        },
+      ),
     );
   }
 }

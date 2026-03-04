@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/network/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 
 // ============================================================================
-// شاشة الإشعارات (Notifications Screen)
+// شاشة الإشعارات — تجلب من API
 // ============================================================================
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -13,74 +15,113 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final List<Map<String, dynamic>> _notifications = [
-    {
-      "title": "خصم 50% على الأزياء!",
-      "body": "لا تفوّت عرض نهاية الأسبوع على أشهر الماركات العالمية",
-      "time": "منذ 5 دقائق",
-      "icon": Icons.local_offer_rounded,
-      "color": const Color(0xFFE91E63),
-      "isRead": false,
-    },
-    {
-      "title": "طلبك في الطريق 🚚",
-      "body": "طلبك رقم #12345 خرج للتوصيل وسيصلك قريباً",
-      "time": "منذ 30 دقيقة",
-      "icon": Icons.local_shipping_rounded,
-      "color": const Color(0xFF4CAF50),
-      "isRead": false,
-    },
-    {
-      "title": "كوبون خاص لك! 🎁",
-      "body": "حصلت على كوبون خصم 20% صالح لمدة 48 ساعة",
-      "time": "منذ ساعة",
-      "icon": Icons.card_giftcard_rounded,
-      "color": AppColors.goldenBronze,
-      "isRead": false,
-    },
-    {
-      "title": "منتج جديد في المفضلة",
-      "body": "ساعة رولكس ديتونا المميزة متوفرة الآن بسعر مخفض",
-      "time": "منذ 3 ساعات",
-      "icon": Icons.favorite_rounded,
-      "color": const Color(0xFFF44336),
-      "isRead": true,
-    },
-    {
-      "title": "تقييم تجربتك",
-      "body": "ما رأيك في آخر طلب؟ شاركنا تقييمك وساعد الآخرين",
-      "time": "أمس",
-      "icon": Icons.star_rounded,
-      "color": const Color(0xFFFF9800),
-      "isRead": true,
-    },
-    {
-      "title": "عروض رمضان بدأت! 🌙",
-      "body": "خصومات تصل إلى 70% على مئات المنتجات",
-      "time": "قبل يومين",
-      "icon": Icons.celebration_rounded,
-      "color": const Color(0xFF9C27B0),
-      "isRead": true,
-    },
-    {
-      "title": "نقاطك زادت!",
-      "body": "تهانينا! حصلت على 150 نقطة جديدة من مشترياتك الأخيرة",
-      "time": "قبل 3 أيام",
-      "icon": Icons.emoji_events_rounded,
-      "color": const Color(0xFF2196F3),
-      "isRead": true,
-    },
-  ];
+  final ApiService _api = ApiService();
+  List<Map<String, dynamic>> _notifications = [];
+  bool _isLoading = true;
+
+  // تعيين أيقونة ولون حسب نوع الإشعار
+  static IconData _iconForType(String? type) {
+    switch (type) {
+      case 'offer':
+        return Icons.local_offer_rounded;
+      case 'order':
+        return Icons.local_shipping_rounded;
+      case 'coupon':
+        return Icons.card_giftcard_rounded;
+      case 'favorite':
+        return Icons.favorite_rounded;
+      case 'review':
+        return Icons.star_rounded;
+      case 'points':
+        return Icons.emoji_events_rounded;
+      case 'promotion':
+        return Icons.celebration_rounded;
+      default:
+        return Icons.notifications_rounded;
+    }
+  }
+
+  static Color _colorForType(String? type) {
+    switch (type) {
+      case 'offer':
+        return const Color(0xFFE91E63);
+      case 'order':
+        return const Color(0xFF4CAF50);
+      case 'coupon':
+        return const Color(0xFFB8860B);
+      case 'favorite':
+        return const Color(0xFFF44336);
+      case 'review':
+        return const Color(0xFFFF9800);
+      case 'points':
+        return const Color(0xFF2196F3);
+      case 'promotion':
+        return const Color(0xFF9C27B0);
+      default:
+        return const Color(0xFF607D8B);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final data = await _api.get(ApiConstants.notifications);
+
+      final List rawNotifications =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      if (mounted) {
+        setState(() {
+          _notifications = rawNotifications.map<Map<String, dynamic>>((notif) {
+            final type = notif['notification_type']?.toString() ??
+                notif['type']?.toString();
+            return {
+              "id": notif['id']?.toString() ?? '',
+              "title": notif['title']?.toString() ?? 'إشعار',
+              "body": notif['message']?.toString() ??
+                  notif['body']?.toString() ??
+                  '',
+              "time": notif['created_at_display']?.toString() ??
+                  notif['time']?.toString() ??
+                  '',
+              "icon": _iconForType(type),
+              "color": _colorForType(type),
+              "isRead": notif['is_read'] ?? false,
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ في جلب الإشعارات: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   int get _unreadCount =>
       _notifications.where((n) => n["isRead"] == false).length;
 
-  void _markAllAsRead() {
+  Future<void> _markAllAsRead() async {
     setState(() {
       for (var n in _notifications) {
         n["isRead"] = true;
       }
     });
+
+    // إرسال طلب قراءة الكل للـ API
+    for (var n in _notifications) {
+      final id = n['id'];
+      if (id != null && id.isNotEmpty) {
+        try {
+          await _api.post(ApiConstants.markNotificationRead(id));
+        } catch (_) {}
+      }
+    }
   }
 
   @override
@@ -98,19 +139,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // الهيدر
               _buildHeader(context, isDarkMode, textColor),
-              // القائمة
               Expanded(
-                child: _notifications.isEmpty
-                    ? _buildEmptyState(isDarkMode)
-                    : ListView.builder(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 5, 16, 100),
-                        itemCount: _notifications.length,
-                        itemBuilder: (_, i) => _buildNotificationCard(
-                            _notifications[i], isDarkMode, textColor),
-                      ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.goldenBronze))
+                    : _notifications.isEmpty
+                        ? _buildEmptyState(isDarkMode)
+                        : RefreshIndicator(
+                            color: AppColors.goldenBronze,
+                            onRefresh: _fetchNotifications,
+                            child: ListView.builder(
+                              physics: const BouncingScrollPhysics(
+                                  parent: AlwaysScrollableScrollPhysics()),
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 5, 16, 100),
+                              itemCount: _notifications.length,
+                              itemBuilder: (_, i) => _buildNotificationCard(
+                                  _notifications[i], isDarkMode, textColor),
+                            ),
+                          ),
               ),
             ],
           ),
@@ -168,7 +217,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           fontWeight: FontWeight.bold)),
                 ),
               const Spacer(),
-              // قراءة الكل
               if (_unreadCount > 0)
                 GestureDetector(
                   onTap: _markAllAsRead,
@@ -275,7 +323,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // أيقونة
           Container(
             width: 44,
             height: 44,
@@ -286,7 +333,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: Icon(notif["icon"], color: notif["color"], size: 22),
           ),
           const SizedBox(width: 12),
-          // المحتوى
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

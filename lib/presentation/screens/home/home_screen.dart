@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
-import '../../../data/dummy_data.dart';
+import '../../../data/providers/auth_provider.dart';
 import '../../../core/widgets/premium_categories.dart';
 import '../../../core/widgets/premium_brochures_section.dart';
 import '../../../core/widgets/premium_featured_offers.dart';
@@ -269,6 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
         isDarkMode ? AppColors.pureWhite : AppColors.lightText;
     final Color headerBgColor =
         isDarkMode ? const Color(0xFF072A38) : AppColors.pureWhite;
+    final auth = context.watch<AuthProvider>();
 
     return SliverAppBar(
       backgroundColor: headerBgColor,
@@ -293,7 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.5)),
-          Text("أهلاً بك يا ${AppData.userName} ✨",
+          Text("أهلاً بك يا ${auth.userName} ✨",
               style: TextStyle(
                   color:
                       isDarkMode ? AppColors.warmBeige : AppColors.goldenBronze,
@@ -319,10 +321,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.goldenBronze, width: 2),
               ),
-              child: const CircleAvatar(
+              child: CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.softCream,
-                backgroundImage: NetworkImage(AppData.userImage),
+                backgroundImage: NetworkImage(auth.userImage),
               ),
             ),
           ),

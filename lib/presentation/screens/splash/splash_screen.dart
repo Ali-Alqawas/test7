@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_theme.dart'; // استدعاء ملف الثيم
-import '../../../core/widgets/page_background.dart'; // استدعاء الخلفية الحية
-import '../onboarding/onboarding_screen.dart'; // بدلاً من main_layout
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/page_background.dart';
+import '../../../data/providers/auth_provider.dart';
+import '../onboarding/onboarding_screen.dart';
+import '../home/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -23,7 +26,6 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    // إجبار شريط الحالة (Status Bar) أن يكون بأيقونات داكنة لأن الخلفية ستكون فاتحة
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
@@ -41,13 +43,34 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Timer(const Duration(seconds: 4), () {
+    // فحص حالة المصادقة ثم التوجيه
+    _checkAuthAndNavigate();
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    final authProvider = context.read<AuthProvider>();
+
+    // فحص التوكن وجلب البروفايل (بالتوازي مع الأنيميشن)
+    await Future.wait([
+      authProvider.checkAuthStatus(),
+      Future.delayed(const Duration(seconds: 3)), // حد أدنى لعرض السبلاش
+    ]);
+
+    if (!mounted) return;
+
+    if (authProvider.isLoggedIn) {
+      // مسجل دخول → الرئيسية مباشرة
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-            builder: (context) => const OnboardingScreen()), // هنا التغيير
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
-    });
+    } else {
+      // غير مسجل → شاشة التعريف
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+      );
+    }
   }
 
   @override
@@ -58,12 +81,9 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    // 💡 السر هنا: نغلف الصفحة بـ Theme نهاري لإجبارها على استخدام الألوان الفاتحة والفقاعات الفاتحة
-    // حتى لو كان التطبيق في الوضع الليلي، هذه الصفحة ستبقى نهارية
     return Theme(
       data: AppTheme.lightTheme,
       child: Scaffold(
-        // استخدمنا PageBackground لتظهر الفقاعات (الرسم) التي طلبتها
         body: PageBackground(
           child: Stack(
             children: [
@@ -75,7 +95,6 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // --- حاوية الشعار (الختم الفخم) ---
                         Container(
                           width: 180,
                           height: 180,
@@ -101,12 +120,8 @@ class _SplashScreenState extends State<SplashScreen>
                             fit: BoxFit.contain,
                           ),
                         ),
-
                         const SizedBox(height: 30),
-
                         const SizedBox(height: 10),
-
-                        // --- الشعار اللفظي ---
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -137,7 +152,6 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
               ),
-              // الحقوق في الأسفل
               const Positioned(
                 bottom: 40,
                 left: 0,

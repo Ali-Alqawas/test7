@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../network/api_service.dart';
+import '../network/api_constants.dart';
 import '../theme/app_colors.dart';
 
+// ============================================================================
+// كاروسيل البانرات — يجلب من API
+// ============================================================================
 class ExclusiveOffersCarousel extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback? onBrowseTap;
@@ -15,10 +20,15 @@ class ExclusiveOffersCarousel extends StatefulWidget {
 
 class _ExclusiveOffersCarouselState extends State<ExclusiveOffersCarousel> {
   final PageController _pageController = PageController(viewportFraction: 0.93);
+  final ApiService _api = ApiService();
   int _currentPage = 0;
   Timer? _timer;
+  bool _isLoading = true;
 
-  final List<Map<String, String>> _offers = [
+  List<Map<String, String>> _offers = [];
+
+  // بانرات احتياطية في حال فشل الـ API
+  static const List<Map<String, String>> _fallbackOffers = [
     {
       "title": "خصم 50% على الأزياء",
       "subtitle": "ينتهي قريباً",
@@ -42,12 +52,59 @@ class _ExclusiveOffersCarouselState extends State<ExclusiveOffersCarousel> {
   @override
   void initState() {
     super.initState();
+    _fetchBanners();
+  }
+
+  Future<void> _fetchBanners() async {
+    try {
+      final data = await _api.get(
+        ApiConstants.banners,
+        requiresAuth: false,
+      );
+
+      final List rawBanners =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      if (rawBanners.isNotEmpty && mounted) {
+        setState(() {
+          _offers = rawBanners.map<Map<String, String>>((banner) {
+            return {
+              "title": banner['title']?.toString() ?? 'عرض حصري',
+              "subtitle": banner['subtitle']?.toString() ??
+                  banner['description']?.toString() ??
+                  '',
+              "image": ApiConstants.resolveImageUrl(
+                  banner['image']?.toString() ??
+                      banner['image_url']?.toString()),
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        // لا توجد بانرات — استخدام الاحتياطي
+        if (mounted) {
+          setState(() {
+            _offers = List.from(_fallbackOffers);
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('خطأ في جلب البانرات: $e');
+      if (mounted) {
+        setState(() {
+          _offers = List.from(_fallbackOffers);
+          _isLoading = false;
+        });
+      }
+    }
+
     _startAutoScroll();
   }
 
   void _startAutoScroll() {
     _timer = Timer.periodic(const Duration(seconds: 4), (Timer timer) {
-      if (_pageController.hasClients) {
+      if (_pageController.hasClients && _offers.isNotEmpty) {
         int nextPage = _currentPage + 1;
         if (nextPage >= _offers.length) nextPage = 0;
         _pageController.animateToPage(nextPage,
@@ -66,6 +123,25 @@ class _ExclusiveOffersCarouselState extends State<ExclusiveOffersCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return SizedBox(
+        height: 180,
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: widget.isDarkMode
+                  ? AppColors.deepNavy
+                  : AppColors.lightBackground,
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_offers.isEmpty) return const SizedBox.shrink();
+
     return Column(
       children: [
         SizedBox(
@@ -122,7 +198,12 @@ class _ExclusiveOffersCarouselState extends State<ExclusiveOffersCarousel> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.network(offer["image"]!, fit: BoxFit.cover),
+                Image.network(offer["image"]!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.deepNavy,
+                        child: const Icon(Icons.image_not_supported,
+                            color: AppColors.grey, size: 40))),
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

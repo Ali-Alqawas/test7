@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import '../network/api_service.dart';
+import '../network/api_constants.dart';
 import '../theme/app_colors.dart';
 import 'offer_action_buttons.dart';
 import '../../presentation/screens/details/merchant_profile_screen.dart';
 import '../../presentation/screens/details/offer_details_screen.dart';
 
-class PremiumFeaturedOffersSection extends StatelessWidget {
+// ============================================================================
+// العروض المميزة — تجلب من API
+// ============================================================================
+class PremiumFeaturedOffersSection extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback? onSeeAllTap;
 
@@ -12,48 +17,80 @@ class PremiumFeaturedOffersSection extends StatelessWidget {
       {super.key, required this.isDarkMode, this.onSeeAllTap});
 
   @override
-  Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> featuredOffers = [
-      {
-        "title": "ساعة رولكس ديتونا",
-        "storeName": "مجوهرات الفخامة",
-        "storeLogo": "https://i.pravatar.cc/150?img=11",
-        "image":
-            "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80",
-        "price": "12,500\$",
-        "oldPrice": "15,000\$",
-      },
-      {
-        "title": "حذاء رياضي نايك اير",
-        "storeName": "نايك ستور",
-        "storeLogo": "https://i.pravatar.cc/150?img=33",
-        "image":
-            "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=500&q=80",
-        "price": "120\$",
-        "oldPrice": "180\$",
-      },
-      {
-        "title": "عطر شانيل بلو",
-        "storeName": "وجوه للعطور",
-        "storeLogo": "https://i.pravatar.cc/150?img=44",
-        "image":
-            "https://images.unsplash.com/photo-1528701800487-ad01fc8b1828?auto=format&fit=crop&w=500&q=80",
-        "price": "150\$",
-        "oldPrice": "200\$",
-      },
-      {
-        "title": "نظارة ريبان أصلية",
-        "storeName": "مغربي للبصريات",
-        "storeLogo": "https://i.pravatar.cc/150?img=12",
-        "image":
-            "https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&w=500&q=80",
-        "price": "95\$",
-        "oldPrice": "130\$",
-      },
-    ];
+  State<PremiumFeaturedOffersSection> createState() =>
+      _PremiumFeaturedOffersSectionState();
+}
 
+class _PremiumFeaturedOffersSectionState
+    extends State<PremiumFeaturedOffersSection> {
+  final ApiService _api = ApiService();
+  List<Map<String, dynamic>> _offers = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchFeaturedOffers();
+  }
+
+  Future<void> _fetchFeaturedOffers() async {
+    try {
+      final data = await _api.get(
+        ApiConstants.products,
+        queryParams: {'is_featured': 'true', 'page_size': '6'},
+        requiresAuth: false,
+      );
+
+      final List rawOffers =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      if (mounted) {
+        setState(() {
+          _offers = rawOffers.map<Map<String, dynamic>>((apiOffer) {
+            var images = apiOffer['images'] as List?;
+            String imageUrl = (images != null && images.isNotEmpty)
+                ? ApiConstants.resolveImageUrl(
+                    images[0]['image_url']?.toString())
+                : ApiConstants.resolveImageUrl(apiOffer['image']?.toString() ??
+                    apiOffer['thumbnail']?.toString());
+
+            String storeName = apiOffer['store_name'] ?? 'متجر غير معروف';
+            String storeLogo = apiOffer['store_logo'] != null
+                ? ApiConstants.resolveImageUrl(
+                    apiOffer['store_logo'].toString())
+                : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
+
+            return {
+              "id": apiOffer['product_id']?.toString() ?? "",
+              "title": apiOffer['title'] ?? 'بدون عنوان',
+              "storeName": storeName,
+              "storeLogo": storeLogo,
+              "storeId": apiOffer['store']?.toString() ?? "",
+              "image": imageUrl,
+              "price": "${apiOffer['price'] ?? '0'}\$",
+              "oldPrice": apiOffer['old_price'] != null
+                  ? "${apiOffer['old_price']}\$"
+                  : "",
+              "is_liked": apiOffer['is_liked'] ?? false,
+              "is_favorited": apiOffer['is_favorited'] ?? false,
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ في جلب العروض المميزة: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final Color textColor =
-        isDarkMode ? AppColors.pureWhite : AppColors.lightText;
+        widget.isDarkMode ? AppColors.pureWhite : AppColors.lightText;
+
+    // إذا كانت العروض فارغة ولا تحميل → لا نعرض القسم
+    if (!_isLoading && _offers.isEmpty) return const SizedBox.shrink();
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -73,7 +110,7 @@ class PremiumFeaturedOffersSection extends StatelessWidget {
                           fontWeight: FontWeight.bold)),
                 ]),
                 GestureDetector(
-                  onTap: onSeeAllTap,
+                  onTap: widget.onSeeAllTap,
                   child: const Row(children: [
                     Text("عرض الكل",
                         style: TextStyle(
@@ -90,25 +127,49 @@ class PremiumFeaturedOffersSection extends StatelessWidget {
           ),
           SizedBox(
             height: 270,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-              itemCount: featuredOffers.length,
-              itemBuilder: (context, index) {
-                return _buildFeaturedCard(context, featuredOffers[index]);
-              },
-            ),
+            child: _isLoading
+                ? _buildLoadingShimmer()
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                    itemCount: _offers.length,
+                    itemBuilder: (context, index) {
+                      return _buildFeaturedCard(context, _offers[index]);
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildLoadingShimmer() {
+    final Color cardColor =
+        widget.isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      itemCount: 3,
+      itemBuilder: (_, __) => Container(
+        width: 160,
+        margin: const EdgeInsets.only(left: 15, bottom: 10),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: AppColors.goldenBronze.withOpacity(0.2), width: 1),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFeaturedCard(BuildContext context, Map<String, dynamic> offer) {
     final Color cardColor =
-        isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
-    final Color borderColor = isDarkMode
+        widget.isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
+    final Color borderColor = widget.isDarkMode
         ? AppColors.goldenBronze.withOpacity(0.8)
         : AppColors.goldenBronze;
 
@@ -128,7 +189,7 @@ class PremiumFeaturedOffersSection extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                   color: AppColors.goldenBronze
-                      .withOpacity(isDarkMode ? 0.15 : 0.2),
+                      .withOpacity(widget.isDarkMode ? 0.15 : 0.2),
                   blurRadius: 10,
                   offset: const Offset(0, 4)),
             ],
@@ -142,15 +203,21 @@ class PremiumFeaturedOffersSection extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.network(offer["image"], fit: BoxFit.cover),
+                      Image.network(offer["image"],
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                              color: AppColors.lightBackground,
+                              child: const Icon(Icons.image_not_supported,
+                                  color: AppColors.grey))),
                       Positioned(
                         top: 8,
                         right: 8,
                         child: Container(
                           padding: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
-                            color:
-                                isDarkMode ? AppColors.deepNavy : Colors.white,
+                            color: widget.isDarkMode
+                                ? AppColors.deepNavy
+                                : Colors.white,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
@@ -217,7 +284,7 @@ class PremiumFeaturedOffersSection extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(offer["title"],
                           style: TextStyle(
-                              color: isDarkMode
+                              color: widget.isDarkMode
                                   ? AppColors.pureWhite
                                   : AppColors.lightText,
                               fontSize: 13,
@@ -236,18 +303,20 @@ class PremiumFeaturedOffersSection extends StatelessWidget {
                                         color: AppColors.goldenBronze,
                                         fontSize: 15,
                                         fontWeight: FontWeight.w900)),
-                                Text(offer["oldPrice"],
-                                    style: const TextStyle(
-                                        color: AppColors.grey,
-                                        fontSize: 10,
-                                        decoration:
-                                            TextDecoration.lineThrough)),
+                                if (offer["oldPrice"]?.isNotEmpty ?? false)
+                                  Text(offer["oldPrice"],
+                                      style: const TextStyle(
+                                          color: AppColors.grey,
+                                          fontSize: 10,
+                                          decoration:
+                                              TextDecoration.lineThrough)),
                               ]),
                           OfferActionButtons(
-                              isDarkMode: isDarkMode,
-                              offerId: "FEAT_${offer["title"]}",
-                              initialIsLiked: false,
-                              initialIsFavorited: false),
+                              isDarkMode: widget.isDarkMode,
+                              offerId: offer["id"] ?? "FEAT_${offer["title"]}",
+                              initialIsLiked: offer["is_liked"] ?? false,
+                              initialIsFavorited:
+                                  offer["is_favorited"] ?? false),
                         ],
                       ),
                     ],

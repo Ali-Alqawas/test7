@@ -256,13 +256,13 @@
 //   }
 // }
 
-import 'dart:convert'; // جديد للتعامل مع JSON
-import 'package:http/http.dart' as http; // جديد للاتصال بالخادم
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_textfield.dart';
+import '../../../data/providers/auth_provider.dart';
 import 'login_screen.dart';
 import 'verification_screen.dart';
 
@@ -284,9 +284,6 @@ class _SignUpScreenState extends State<SignUpScreen>
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-
-  // --- جديد: متغير للتحكم في حالة التحميل ---
-  bool _isLoading = false;
 
   @override
   void initState() {
@@ -314,9 +311,8 @@ class _SignUpScreenState extends State<SignUpScreen>
     super.dispose();
   }
 
-  // --- جديد: دالة الاتصال بالخادم لإنشاء الحساب ---
+  // --- تسجيل حساب جديد عبر AuthProvider ---
   Future<void> _registerUser() async {
-    // 1. التحقق الأساسي من الحقول
     if (_nameController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _passwordController.text.isEmpty) {
@@ -333,97 +329,37 @@ class _SignUpScreenState extends State<SignUpScreen>
       return;
     }
 
-    // تفعيل مؤشر التحميل
-    setState(() {
-      _isLoading = true;
-    });
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.register(
+      username: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+      phoneNumber: _phoneController.text.trim(),
+      password: _passwordController.text,
+      confirmPassword: _confirmPasswordController.text,
+    );
 
-    try {
-      // ⚠️ تنبيه هام: يجب تغيير هذا الـ IP إلى الـ IPv4 الخاص بجهاز الكمبيوتر الخاص بك
-      // للتحقق في لينكس/ماك اكتب: ifconfig | grep inet
-      // للتحقق في ويندوز اكتب: ipconfig
-      const String ipAddress = '192.168.1.103'; // <--- ضع الـ IP هنا
-      final Uri url = Uri.parse('http://$ipAddress:8000/api/v1/auth/register/');
+    if (!mounted) return;
 
-      // 2. إرسال الطلب
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'username':
-              _nameController.text.trim(), // نرسله احتياطاً كما في التوثيق
-          'full_name': _nameController.text.trim(), // 👈 أضفنا هذا الحقل الجديد
-          'email': _emailController.text.trim(),
-          'phone_number': _phoneController.text.trim(),
-          'password': _passwordController.text,
-          'confirm_password': _confirmPasswordController.text,
-        }),
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('تم إنشاء الحساب بنجاح!'),
+            backgroundColor: Colors.green),
       );
-
-      if (response.body.startsWith('<')) {
-        // إذا كان الرد يبدأ بعلامة HTML، فهذا يعني أن هناك خطأ في السيرفر
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('خطأ في السيرفر: تم إرجاع صفحة بدلاً من بيانات')),
-          );
-        }
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
-
-      // 3. معالجة الرد
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        // تم التسجيل بنجاح
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('تم إنشاء الحساب بنجاح!'),
-                backgroundColor: Colors.green),
-          );
-
-          // الانتقال لشاشة التوثيق (أو شاشة الدخول)
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => VerificationScreen(
-                email: _emailController.text,
-              ),
-            ),
-          );
-        }
-      } else {
-        // فشل التسجيل (مثلاً البريد موجود مسبقاً)
-        if (mounted) {
-          final decoded = jsonDecode(response.body);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('خطأ: ${decoded.toString()}'),
-                backgroundColor: Colors.red),
-          );
-        }
-      }
-    } catch (e) {
-      // خطأ في الاتصال (السيرفر مغلق أو الـ IP خطأ)
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  'فشل الاتصال بالخادم: تأكد من عنوان الـ IP والشبكة\n$e')),
-        );
-      }
-    } finally {
-      // إيقاف مؤشر التحميل في كل الأحوال
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VerificationScreen(
+            email: _emailController.text,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(authProvider.errorMessage ?? 'فشل إنشاء الحساب'),
+            backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -504,15 +440,17 @@ class _SignUpScreenState extends State<SignUpScreen>
                   ),
                   const SizedBox(height: 30),
 
-                  // --- جديد: إظهار مؤشر تحميل أو زر الإرسال ---
-                  _isLoading
-                      ? const CircularProgressIndicator(
-                          color: AppColors.goldenBronze)
-                      : CustomButton(
-                          text: "إنشاء حساب",
-                          onPressed: _registerUser, // ربط الزر بالدالة الجديدة
-                          icon: Icons.person_add_alt_1_rounded,
-                        ),
+                  // --- زر إنشاء الحساب مع مؤشر التحميل ---
+                  Consumer<AuthProvider>(
+                    builder: (context, auth, _) => auth.isLoading
+                        ? const CircularProgressIndicator(
+                            color: AppColors.goldenBronze)
+                        : CustomButton(
+                            text: "إنشاء حساب",
+                            onPressed: _registerUser,
+                            icon: Icons.person_add_alt_1_rounded,
+                          ),
+                  ),
                   const SizedBox(height: 25),
 
                   Row(

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/network/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/offer_action_buttons.dart';
 import '../details/offer_details_screen.dart';
 
 // ============================================================================
-// شاشة المفضلة (Favorites Screen)
+// شاشة المفضلة — تجلب من API
 // ============================================================================
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -15,62 +17,91 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  // عروض المفضلة (محاكاة) — مع نوع العرض لعرض نفس الكرت
-  final List<Map<String, dynamic>> _favorites = [
-    {
-      "title": "ساعة رولكس ديتونا",
-      "storeName": "مجوهرات الفخامة",
-      "storeLogo": "https://i.pravatar.cc/150?img=11",
-      "image":
-          "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80",
-      "price": "12,500\$",
-      "oldPrice": "15,000\$",
-      "discount": "17%",
-      "category": "مجوهرات",
-      "offerType": "featured",
-    },
-    {
-      "title": "حذاء رياضي نايك اير",
-      "storeName": "نايك ستور",
-      "storeLogo": "https://i.pravatar.cc/150?img=33",
-      "image":
-          "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=500&q=80",
-      "price": "120\$",
-      "oldPrice": "180\$",
-      "discount": "33%",
-      "category": "أزياء",
-      "offerType": "standard",
-    },
-    {
-      "title": "MacBook Pro M3",
-      "storeName": "آبل ستور",
-      "storeLogo": "https://i.pravatar.cc/150?img=15",
-      "image":
-          "https://images.unsplash.com/photo-1517336714731-489689fd1ca4?auto=format&fit=crop&w=500&q=80",
-      "price": "1,200\$",
-      "oldPrice": "1,450\$",
-      "discount": "17%",
-      "category": "إلكترونيات",
-      "offerType": "standard",
-    },
-    {
-      "title": "نظارة ريبان أصلية",
-      "storeName": "مغربي للبصريات",
-      "storeLogo": "https://i.pravatar.cc/150?img=12",
-      "image":
-          "https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&w=500&q=80",
-      "price": "95\$",
-      "oldPrice": "130\$",
-      "discount": "27%",
-      "category": "إكسسوارات",
-      "offerType": "featured",
-    },
-  ];
+  final ApiService _api = ApiService();
+  List<Map<String, dynamic>> _favorites = [];
+  bool _isLoading = true;
 
-  void _removeItem(int index) {
-    setState(() {
-      _favorites.removeAt(index);
-    });
+  @override
+  void initState() {
+    super.initState();
+    _fetchFavorites();
+  }
+
+  Future<void> _fetchFavorites() async {
+    try {
+      final data = await _api.get(ApiConstants.favorites);
+
+      final List rawFavorites =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      if (mounted) {
+        setState(() {
+          _favorites = rawFavorites.map<Map<String, dynamic>>((item) {
+            // قد تكون البيانات embedded أو مرجعية
+            final product = item['product'] ?? item;
+
+            var images = product['images'] as List?;
+            String imageUrl = (images != null && images.isNotEmpty)
+                ? ApiConstants.resolveImageUrl(
+                    images[0]['image_url']?.toString())
+                : ApiConstants.resolveImageUrl(product['image']?.toString() ??
+                    product['thumbnail']?.toString());
+
+            String storeName = product['store_name'] ?? 'متجر غير معروف';
+            String storeLogo = product['store_logo'] != null
+                ? ApiConstants.resolveImageUrl(product['store_logo'].toString())
+                : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
+
+            // حساب الخصم
+            double price =
+                double.tryParse(product['price']?.toString() ?? '0') ?? 0;
+            double oldPrice =
+                double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
+            String discount = '';
+            if (oldPrice > price && oldPrice > 0) {
+              discount =
+                  '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
+            }
+
+            return {
+              "id": product['product_id']?.toString() ??
+                  product['id']?.toString() ??
+                  '',
+              "title": product['title'] ?? 'بدون عنوان',
+              "storeName": storeName,
+              "storeLogo": storeLogo,
+              "image": imageUrl,
+              "price": "${product['price'] ?? '0'}\$",
+              "oldPrice": oldPrice > 0 ? "${product['old_price']}\$" : "",
+              "discount": discount,
+              "category": product['category_name'] ?? '',
+              "offerType":
+                  product['is_featured'] == true ? 'featured' : 'standard',
+              "is_liked": product['is_liked'] ?? false,
+              "is_favorited": true,
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ في جلب المفضلة: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _removeItem(int index) async {
+    final item = _favorites[index];
+    final productId = item['id'];
+    setState(() => _favorites.removeAt(index));
+
+    if (productId.isNotEmpty) {
+      try {
+        await _api.post(ApiConstants.toggleFavorite(productId));
+      } catch (e) {
+        debugPrint('خطأ في إزالة المفضلة: $e');
+      }
+    }
   }
 
   OfferDetailType _mapType(String type) {
@@ -101,22 +132,29 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // الهيدر (بدون محرك بحث)
               _buildHeader(context, isDarkMode, textColor),
-
-              // المحتوى
               Expanded(
-                child: _favorites.isEmpty
-                    ? _buildEmptyState(isDarkMode)
-                    : ListView.builder(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 5, 16, 100),
-                        itemCount: _favorites.length,
-                        itemBuilder: (context, index) {
-                          return _buildFavoriteCard(
-                              _favorites[index], isDarkMode, index);
-                        },
-                      ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.goldenBronze))
+                    : _favorites.isEmpty
+                        ? _buildEmptyState(isDarkMode)
+                        : RefreshIndicator(
+                            color: AppColors.goldenBronze,
+                            onRefresh: _fetchFavorites,
+                            child: ListView.builder(
+                              physics: const BouncingScrollPhysics(
+                                  parent: AlwaysScrollableScrollPhysics()),
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 5, 16, 100),
+                              itemCount: _favorites.length,
+                              itemBuilder: (context, index) {
+                                return _buildFavoriteCard(
+                                    _favorites[index], isDarkMode, index);
+                              },
+                            ),
+                          ),
               ),
             ],
           ),
@@ -125,7 +163,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  // ========================= الهيدر =========================
   Widget _buildHeader(BuildContext context, bool isDarkMode, Color textColor) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 15, 20, 10),
@@ -195,7 +232,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  // ========================= الحالة الفارغة =========================
   Widget _buildEmptyState(bool isDarkMode) {
     return Center(
       child: Column(
@@ -223,8 +259,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  // ========================= كرت المفضلة =========================
-  // يستخدم نفس تصميم كروت العروض (مثل featured_offers_screen)
   Widget _buildFavoriteCard(
       Map<String, dynamic> item, bool isDarkMode, int index) {
     final Color cardC =
@@ -235,7 +269,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final bool isFeatured = item["offerType"] == "featured";
 
     return Dismissible(
-      key: Key(item["title"] + index.toString()),
+      key: Key("${item["id"]}_$index"),
       direction: DismissDirection.endToStart,
       background: Container(
         margin: const EdgeInsets.only(bottom: 14),
@@ -290,13 +324,17 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             borderRadius: BorderRadius.circular(19),
             child: Row(
               children: [
-                // الصورة
                 SizedBox(
                   width: 130,
                   height: 140,
                   child: Stack(fit: StackFit.expand, children: [
-                    Image.network(item["image"], fit: BoxFit.cover),
-                    if (item["discount"] != null)
+                    Image.network(item["image"],
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                            color: AppColors.lightBackground,
+                            child: const Icon(Icons.image_not_supported,
+                                color: AppColors.grey))),
+                    if ((item["discount"] ?? '').isNotEmpty)
                       Positioned(
                           top: 8,
                           right: 8,
@@ -328,7 +366,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                       fontWeight: FontWeight.bold)))),
                   ]),
                 ),
-                // التفاصيل
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -382,16 +419,17 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                           color: AppColors.goldenBronze,
                                           fontSize: 16,
                                           fontWeight: FontWeight.w900)),
-                                  Text(item["oldPrice"],
-                                      style: const TextStyle(
-                                          color: AppColors.grey,
-                                          fontSize: 11,
-                                          decoration:
-                                              TextDecoration.lineThrough)),
+                                  if ((item["oldPrice"] ?? '').isNotEmpty)
+                                    Text(item["oldPrice"],
+                                        style: const TextStyle(
+                                            color: AppColors.grey,
+                                            fontSize: 11,
+                                            decoration:
+                                                TextDecoration.lineThrough)),
                                 ]),
                             OfferActionButtons(
                                 isDarkMode: isDarkMode,
-                                offerId: "FAV_${item["title"]}",
+                                offerId: item["id"] ?? "FAV_${item["title"]}",
                                 initialIsFavorited: true),
                           ],
                         ),

@@ -368,10 +368,10 @@
 //   }
 // }
 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/network/api_constants.dart';
+import '../../../core/network/token_manager.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
@@ -394,8 +394,7 @@ class _InterestsScreenState extends State<InterestsScreen>
   bool _isLoadingCategories = true;
   bool _isSaving = false;
 
-  // ⚠️ تنبيه: ضع عنوان IP الخاص بجهازك هنا
-  final String baseUrl = 'http://192.168.1.103:8000/api/v1';
+  final ApiService _api = ApiService();
 
   int get _selectedCount =>
       _interests.where((i) => i['selected'] == true).length;
@@ -440,44 +439,35 @@ class _InterestsScreenState extends State<InterestsScreen>
     return Icons.category_rounded; // أيقونة افتراضية
   }
 
-  // --- جلب الفئات من الخادم ---
+  // --- جلب الفئات عبر ApiService ---
   Future<void> _fetchCategories() async {
     try {
-      final Uri url = Uri.parse('$baseUrl/catalog/categories/');
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      final data = await _api.get(ApiConstants.categories, requiresAuth: false);
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(
-            utf8.decode(response.bodyBytes)); // utf8 لدعم اللغة العربية
-        // التوثيق يقول أن الرد قد يكون Paginated (يحتوي على results) أو قائمة مباشرة
-        List categories =
-            data is Map && data.containsKey('results') ? data['results'] : data;
+      List categories = data is Map && data.containsKey('results')
+          ? data['results']
+          : (data is List ? data : []);
 
-        if (mounted) {
-          setState(() {
-            _interests = categories
-                .map<Map<String, dynamic>>((cat) => {
-                      'id': cat['id'] ??
-                          cat['category_id'], // يعتمد على اسم الـ ID في الرد
-                      'name': cat['name'] ?? cat['name_en'] ?? 'فئة غير معروفة',
-                      'icon': _getIconForCategory(cat['name'] ?? ''),
-                      'selected': false,
-                    })
-                .toList();
-            _isLoadingCategories = false;
-          });
-        }
-      } else {
-        _showError('فشل جلب الفئات من الخادم');
-        setState(() => _isLoadingCategories = false);
+      if (mounted) {
+        setState(() {
+          _interests = categories
+              .map<Map<String, dynamic>>((cat) => {
+                    'id': cat['id'] ?? cat['category_id'],
+                    'name': cat['name'] ?? cat['name_en'] ?? 'فئة غير معروفة',
+                    'icon': _getIconForCategory(cat['name'] ?? ''),
+                    'selected': false,
+                  })
+              .toList();
+          _isLoadingCategories = false;
+        });
       }
     } catch (e) {
       _showError('تأكد من اتصالك بالإنترنت والخادم');
-      setState(() => _isLoadingCategories = false);
+      if (mounted) setState(() => _isLoadingCategories = false);
     }
   }
 
-  // --- حفظ الاهتمامات للمستخدم ---
+  // --- حفظ الاهتمامات عبر ApiService ---
   Future<void> _saveInterests() async {
     final selectedIds = _interests
         .where((i) => i['selected'] == true)
@@ -489,41 +479,28 @@ class _InterestsScreenState extends State<InterestsScreen>
     setState(() => _isSaving = true);
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token');
-
-      if (token == null) {
-        _showError('يرجى تسجيل الدخول أولاً');
-        setState(() => _isSaving = false);
-        return;
-      }
-
-      // إرسال الاهتمامات واحداً تلو الآخر (بناءً على تصميم الـ Endpoint)
       for (var categoryId in selectedIds) {
-        final Uri url = Uri.parse('$baseUrl/social/interests/');
-        await http.post(
-          url,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode({'category': categoryId}),
+        await _api.post(
+          ApiConstants.interests,
+          body: {'category': categoryId},
         );
       }
 
       if (mounted) {
-        // تم الحفظ بنجاح، انتقل للشاشة الرئيسية
         _navigateToHome();
       }
     } catch (e) {
       _showError('حدث خطأ أثناء حفظ الاهتمامات');
-      setState(() => _isSaving = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  void _navigateToHome() {
-    // TODO: استبدل هذا بالشاشة الرئيسية الخاصة بك
+  Future<void> _navigateToHome() async {
+    // حفظ أن المستخدم أكمل اختيار اهتماماته
+    await TokenManager.setInterestsCompleted();
+
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
           content: Text('تم الحفظ! جاري الانتقال للرئيسية...'),
@@ -531,8 +508,8 @@ class _InterestsScreenState extends State<InterestsScreen>
     );
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()), // تأكد من اسم شاشتك هنا
-      (route) => false, // false تعني "لا تبقي أي شاشة سابقة"
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
     );
   }
 

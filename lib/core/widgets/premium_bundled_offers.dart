@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import '../network/api_service.dart';
+import '../network/api_constants.dart';
 import '../theme/app_colors.dart';
 import 'offer_action_buttons.dart';
 import '../../presentation/screens/details/merchant_profile_screen.dart';
 import '../../presentation/screens/details/offer_details_screen.dart';
 
-class PremiumBundledOffersSection extends StatelessWidget {
+// ============================================================================
+// باقات التوفير — تجلب من API
+// ============================================================================
+class PremiumBundledOffersSection extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback? onSeeAllTap;
 
@@ -12,55 +17,152 @@ class PremiumBundledOffersSection extends StatelessWidget {
       {super.key, required this.isDarkMode, this.onSeeAllTap});
 
   @override
-  Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> bundles = [
-      {
-        "title": "باقة التوفير العملاقة",
-        "store": "هايبر بنده",
-        "storeLogo": "https://i.pravatar.cc/150?img=50",
-        "price": "199\$",
-        "oldPrice": "350\$",
-        "saving": "وفر 151\$",
-        "images": [
-          "assets/images/1.jpeg",
-          "assets/images/2.jpeg",
-          "assets/images/3.jpeg",
-          "assets/images/4.jpeg",
-          "assets/images/5.jpeg",
-        ],
-        "isLocalImage": true,
-      },
-      {
-        "title": "مجموعة الجمال",
-        "store": "سيفورا",
-        "storeLogo": "https://i.pravatar.cc/150?img=44",
-        "price": "120\$",
-        "oldPrice": "180\$",
-        "saving": "وفر 60\$",
-        "images": [
-          "assets/images/6.jpeg",
-          "assets/images/7.jpeg",
-          "assets/images/1.jpeg",
-        ],
-        "isLocalImage": true,
-      },
-      {
-        "title": "ثنائي الأجهزة",
-        "store": "اكسترا",
-        "storeLogo": "https://i.pravatar.cc/150?img=11",
-        "price": "999\$",
-        "oldPrice": "1200\$",
-        "saving": "وفر 200\$",
-        "images": [
-          "assets/images/2.jpeg",
-          "assets/images/3.jpeg",
-        ],
-        "isLocalImage": true,
-      },
-    ];
+  State<PremiumBundledOffersSection> createState() =>
+      _PremiumBundledOffersSectionState();
+}
 
+class _PremiumBundledOffersSectionState
+    extends State<PremiumBundledOffersSection> {
+  final ApiService _api = ApiService();
+  List<Map<String, dynamic>> _bundles = [];
+  bool _isLoading = true;
+
+  // بيانات احتياطية
+  static final List<Map<String, dynamic>> _fallbackBundles = [
+    {
+      "title": "باقة التوفير العملاقة",
+      "store": "هايبر بنده",
+      "storeLogo": "https://i.pravatar.cc/150?img=50",
+      "price": "199\$",
+      "oldPrice": "350\$",
+      "saving": "وفر 151\$",
+      "images": [
+        "assets/images/1.jpeg",
+        "assets/images/2.jpeg",
+        "assets/images/3.jpeg",
+        "assets/images/4.jpeg",
+        "assets/images/5.jpeg",
+      ],
+      "isLocalImage": true,
+    },
+    {
+      "title": "مجموعة الجمال",
+      "store": "سيفورا",
+      "storeLogo": "https://i.pravatar.cc/150?img=44",
+      "price": "120\$",
+      "oldPrice": "180\$",
+      "saving": "وفر 60\$",
+      "images": [
+        "assets/images/6.jpeg",
+        "assets/images/7.jpeg",
+        "assets/images/1.jpeg",
+      ],
+      "isLocalImage": true,
+    },
+    {
+      "title": "ثنائي الأجهزة",
+      "store": "اكسترا",
+      "storeLogo": "https://i.pravatar.cc/150?img=11",
+      "price": "999\$",
+      "oldPrice": "1200\$",
+      "saving": "وفر 200\$",
+      "images": [
+        "assets/images/2.jpeg",
+        "assets/images/3.jpeg",
+      ],
+      "isLocalImage": true,
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchBundles();
+  }
+
+  Future<void> _fetchBundles() async {
+    try {
+      final data = await _api.get(
+        ApiConstants.productGroups,
+        queryParams: {'type': 'bundle', 'page_size': '6'},
+        requiresAuth: false,
+      );
+
+      final List rawBundles =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      if (rawBundles.isNotEmpty && mounted) {
+        setState(() {
+          _bundles = rawBundles.map<Map<String, dynamic>>((b) {
+            String storeName = b['store_name']?.toString() ?? 'متجر';
+
+            // حساب التوفير
+            double price = double.tryParse(b['price']?.toString() ?? '0') ?? 0;
+            double oldPrice =
+                double.tryParse(b['old_price']?.toString() ?? '0') ?? 0;
+            double saving = oldPrice > price ? oldPrice - price : 0;
+
+            // جمع صور المنتجات
+            List<String> images = [];
+            if (b['products'] is List) {
+              for (var p in b['products']) {
+                if (p['images'] is List && (p['images'] as List).isNotEmpty) {
+                  images.add(ApiConstants.resolveImageUrl(
+                      p['images'][0]['image_url']?.toString()));
+                } else if (p['image'] != null) {
+                  images
+                      .add(ApiConstants.resolveImageUrl(p['image'].toString()));
+                }
+              }
+            }
+            if (images.isEmpty && b['image'] != null) {
+              images.add(ApiConstants.resolveImageUrl(b['image'].toString()));
+            }
+            if (images.isEmpty) {
+              images.add(ApiConstants.resolveImageUrl(null));
+            }
+
+            return {
+              "id": b['id']?.toString() ?? '',
+              "title": b['title']?.toString() ?? 'باقة',
+              "store": storeName,
+              "storeLogo": b['store_logo'] != null
+                  ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
+                  : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff',
+              "price": "${b['price'] ?? '0'}\$",
+              "oldPrice": oldPrice > 0 ? "${b['old_price']}\$" : "",
+              "saving": saving > 0 ? "وفر ${saving.toStringAsFixed(0)}\$" : "",
+              "images": images,
+              "isLocalImage": false,
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        if (mounted) {
+          setState(() {
+            _bundles = List.from(_fallbackBundles);
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('خطأ في جلب الباقات: $e');
+      if (mounted) {
+        setState(() {
+          _bundles = List.from(_fallbackBundles);
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final Color textColor =
-        isDarkMode ? AppColors.pureWhite : AppColors.lightText;
+        widget.isDarkMode ? AppColors.pureWhite : AppColors.lightText;
+
+    if (!_isLoading && _bundles.isEmpty) return const SizedBox.shrink();
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -78,7 +180,7 @@ class PremiumBundledOffersSection extends StatelessWidget {
                         fontSize: 18,
                         fontWeight: FontWeight.bold)),
                 GestureDetector(
-                  onTap: onSeeAllTap,
+                  onTap: widget.onSeeAllTap,
                   child: const Row(children: [
                     Text("عرض الكل",
                         style: TextStyle(
@@ -95,24 +197,48 @@ class PremiumBundledOffersSection extends StatelessWidget {
           ),
           SizedBox(
             height: 160,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-              itemCount: bundles.length,
-              itemBuilder: (context, index) {
-                return _buildBundleCard(context, bundles[index]);
-              },
-            ),
+            child: _isLoading
+                ? _buildLoadingShimmer()
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                    itemCount: _bundles.length,
+                    itemBuilder: (context, index) {
+                      return _buildBundleCard(context, _bundles[index]);
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildLoadingShimmer() {
+    final Color cardBg =
+        widget.isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      itemCount: 2,
+      itemBuilder: (_, __) => Container(
+        width: 330,
+        height: 160,
+        margin: const EdgeInsets.only(left: 15, bottom: 8),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBundleCard(BuildContext context, Map<String, dynamic> bundle) {
-    final Color cardBg = isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
-    final Color borderColor = isDarkMode
+    final Color cardBg =
+        widget.isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
+    final Color borderColor = widget.isDarkMode
         ? AppColors.goldenBronze.withOpacity(0.3)
         : Colors.grey.shade200;
     final bool isLocal = bundle["isLocalImage"] ?? false;
@@ -132,7 +258,7 @@ class PremiumBundledOffersSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: borderColor, width: 1.2),
             boxShadow: [
-              if (!isDarkMode)
+              if (!widget.isDarkMode)
                 BoxShadow(
                     color: AppColors.goldenBronze.withOpacity(0.08),
                     blurRadius: 10,
@@ -154,8 +280,8 @@ class PremiumBundledOffersSection extends StatelessWidget {
                       topRight: Radius.circular(15),
                       bottomRight: Radius.circular(15)),
                   child: _buildRobustDynamicCollage(
-                    bundle["images"] as List<String>,
-                    isDarkMode ? AppColors.deepNavy : Colors.white,
+                    (bundle["images"] as List).cast<String>(),
+                    widget.isDarkMode ? AppColors.deepNavy : Colors.white,
                     isLocal,
                   ),
                 ),
@@ -166,22 +292,23 @@ class PremiumBundledOffersSection extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 3),
-                        decoration: BoxDecoration(
-                            color: AppColors.error.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4)),
-                        child: Text(bundle["saving"],
-                            style: const TextStyle(
-                                color: AppColors.error,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold)),
-                      ),
+                      if ((bundle["saving"] ?? '').isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: AppColors.error.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4)),
+                          child: Text(bundle["saving"],
+                              style: const TextStyle(
+                                  color: AppColors.error,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold)),
+                        ),
                       const SizedBox(height: 6),
                       Text(bundle["title"],
                           style: TextStyle(
-                              color: isDarkMode
+                              color: widget.isDarkMode
                                   ? AppColors.pureWhite
                                   : AppColors.lightText,
                               fontSize: 13,
@@ -243,15 +370,18 @@ class PremiumBundledOffersSection extends StatelessWidget {
                                         color: AppColors.goldenBronze,
                                         fontSize: 15,
                                         fontWeight: FontWeight.w900)),
-                                Text(bundle["oldPrice"],
-                                    style: const TextStyle(
-                                        color: AppColors.grey,
-                                        fontSize: 10,
-                                        decoration:
-                                            TextDecoration.lineThrough)),
+                                if ((bundle["oldPrice"] ?? '').isNotEmpty)
+                                  Text(bundle["oldPrice"],
+                                      style: const TextStyle(
+                                          color: AppColors.grey,
+                                          fontSize: 10,
+                                          decoration:
+                                              TextDecoration.lineThrough)),
                               ]),
                           OfferActionButtons(
-                              isDarkMode: isDarkMode, offerId: "BUNDLE_XXX"),
+                              isDarkMode: widget.isDarkMode,
+                              offerId:
+                                  bundle["id"] ?? "BUNDLE_${bundle["title"]}"),
                         ],
                       ),
                     ],

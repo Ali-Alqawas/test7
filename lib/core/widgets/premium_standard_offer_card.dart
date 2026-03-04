@@ -244,10 +244,9 @@
 //   }
 // }
 
-
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import '../network/api_service.dart';
+import '../network/api_constants.dart';
 import '../theme/app_colors.dart';
 import 'offer_action_buttons.dart';
 import '../../presentation/screens/details/offer_details_screen.dart';
@@ -265,16 +264,16 @@ class PremiumStandardOffersSection extends StatefulWidget {
   });
 
   @override
-  State<PremiumStandardOffersSection> createState() => _PremiumStandardOffersSectionState();
+  State<PremiumStandardOffersSection> createState() =>
+      _PremiumStandardOffersSectionState();
 }
 
-class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSection> {
+class _PremiumStandardOffersSectionState
+    extends State<PremiumStandardOffersSection> {
   // 2. متغيرات الحالة
   List<Map<String, dynamic>> _offers = [];
   bool _isLoading = true;
-
-  // ⚠️ تنبيه: تذكر تعديل هذا الـ IP ليطابق جهازك
-  final String baseUrl = 'http://192.168.1.103:8000/api/v1';
+  final ApiService _api = ApiService();
 
   @override
   void initState() {
@@ -282,55 +281,55 @@ class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSect
     _fetchOffers(); // جلب العروض فور بناء القسم
   }
 
-  // 3. دالة جلب العروض من السيرفر
+  // جلب العروض عبر ApiService
   Future<void> _fetchOffers() async {
     try {
-      // نطلب 10 عروض فقط لكي لا نثقل الشاشة الرئيسية
-      final Uri url = Uri.parse('$baseUrl/catalog/products/?page_size=10');
-      final response = await http.get(url,
-        // 👇 التعديل هنا: إخبار السيرفر بأننا نريد JSON فقط لتجنب خطأ الـ HTML
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },).timeout(const Duration(seconds: 15));
+      final data = await _api.get(
+        ApiConstants.products,
+        queryParams: {'page_size': '10'},
+        requiresAuth: false,
+      );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final List rawOffers = data['results'] ?? [];
+      final List rawOffers =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
 
-        if (mounted) {
-          setState(() {
-            // 4. تحويل بيانات السيرفر إلى نفس الهيكل الذي صممته أنت
-            _offers = rawOffers.map<Map<String, dynamic>>((apiOffer) {
-              
-              // معالجة الصور: إذا كان هناك صور نأخذ الأولى، وإلا نضع صورة افتراضية
-              var images = apiOffer['images'] as List?;
-              String imageUrl = (images != null && images.isNotEmpty) 
-                  ? images[0]['image_url'] 
-                  : 'https://placehold.co/400x400/png?text=No+Image';
+      if (mounted) {
+        setState(() {
+          _offers = rawOffers.map<Map<String, dynamic>>((apiOffer) {
+            var images = apiOffer['images'] as List?;
+            String imageUrl = (images != null && images.isNotEmpty)
+                ? ApiConstants.resolveImageUrl(
+                    images[0]['image_url']?.toString())
+                : ApiConstants.resolveImageUrl(null);
 
-              // توليد شعار للمتجر بناءً على اسمه إذا لم يكن متوفراً
-              String storeName = apiOffer['store_name'] ?? 'متجر غير معروف';
-              String storeLogo = 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=random&color=fff';
+            // صورة المنتج المباشرة (بعض APIs ترسلها كحقل مباشر)
+            if (images == null || images.isEmpty) {
+              imageUrl = ApiConstants.resolveImageUrl(
+                apiOffer['image']?.toString() ??
+                    apiOffer['thumbnail']?.toString(),
+              );
+            }
 
-              return {
-                "id": apiOffer['product_id']?.toString() ?? "",
-                "title": apiOffer['title'] ?? 'بدون عنوان',
-                "storeName": storeName,
-                "storeLogo": storeLogo,
-                "image": imageUrl,
-                // تنسيق السعر وإضافة علامة الدولار (أو العملة التي تفضلها)
-                "price": "${apiOffer['price'] ?? '0'}\$",
-                "oldPrice": apiOffer['old_price'] != null ? "${apiOffer['old_price']}\$" : "",
-                "is_liked": apiOffer['is_liked'] ?? false,
-                "is_favorited": apiOffer['is_favorited'] ?? false,
-              };
-            }).toList();
-            _isLoading = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _isLoading = false);
+            String storeName = apiOffer['store_name'] ?? 'متجر غير معروف';
+            String storeLogo =
+                'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=random&color=fff';
+
+            return {
+              "id": apiOffer['product_id']?.toString() ?? "",
+              "title": apiOffer['title'] ?? 'بدون عنوان',
+              "storeName": storeName,
+              "storeLogo": storeLogo,
+              "image": imageUrl,
+              "price": "${apiOffer['price'] ?? '0'}\$",
+              "oldPrice": apiOffer['old_price'] != null
+                  ? "${apiOffer['old_price']}\$"
+                  : "",
+              "is_liked": apiOffer['is_liked'] ?? false,
+              "is_favorited": apiOffer['is_favorited'] ?? false,
+            };
+          }).toList();
+          _isLoading = false;
+        });
       }
     } catch (e) {
       debugPrint('خطأ في جلب العروض: $e');
@@ -340,7 +339,8 @@ class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSect
 
   @override
   Widget build(BuildContext context) {
-    final Color textColor = widget.isDarkMode ? AppColors.pureWhite : AppColors.lightText;
+    final Color textColor =
+        widget.isDarkMode ? AppColors.pureWhite : AppColors.lightText;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -375,18 +375,23 @@ class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSect
               ],
             ),
           ),
-          
+
           // 5. بناء واجهة التحميل أو قائمة العروض
           SizedBox(
             height: 270,
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.goldenBronze))
+                ? const Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.goldenBronze))
                 : _offers.isEmpty
-                    ? Center(child: Text("لا توجد عروض حالياً", style: TextStyle(color: textColor)))
+                    ? Center(
+                        child: Text("لا توجد عروض حالياً",
+                            style: TextStyle(color: textColor)))
                     : ListView.builder(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 5),
                         itemCount: _offers.length,
                         itemBuilder: (context, index) {
                           return _buildStandardCard(context, _offers[index]);
@@ -399,8 +404,11 @@ class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSect
   }
 
   Widget _buildStandardCard(BuildContext context, Map<String, dynamic> offer) {
-    final Color cardColor = widget.isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
-    final Color borderColor = widget.isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.shade200;
+    final Color cardColor =
+        widget.isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
+    final Color borderColor = widget.isDarkMode
+        ? Colors.white.withOpacity(0.05)
+        : Colors.grey.shade200;
 
     return GestureDetector(
         onTap: () => Navigator.push(
@@ -417,7 +425,8 @@ class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSect
             border: Border.all(color: borderColor, width: 1.0),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(widget.isDarkMode ? 0.2 : 0.05),
+                  color:
+                      Colors.black.withOpacity(widget.isDarkMode ? 0.2 : 0.05),
                   blurRadius: 8,
                   offset: const Offset(0, 4))
             ],
@@ -433,10 +442,12 @@ class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSect
                     children: [
                       // استخدمنا NetworkImage مع معالجة خطأ تحميل الصورة (ErrorBuilder)
                       Image.network(
-                        offer["image"], 
+                        offer["image"],
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => 
-                            Container(color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+                        errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.image_not_supported,
+                                color: Colors.grey)),
                       ),
                       Positioned(
                         top: 8,
@@ -444,7 +455,9 @@ class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSect
                         child: Container(
                           padding: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
-                            color: widget.isDarkMode ? AppColors.deepNavy : Colors.white,
+                            color: widget.isDarkMode
+                                ? AppColors.deepNavy
+                                : Colors.white,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
@@ -462,7 +475,8 @@ class _PremiumStandardOffersSectionState extends State<PremiumStandardOffersSect
                             child: CircleAvatar(
                                 radius: 12,
                                 backgroundColor: AppColors.lightBackground,
-                                backgroundImage: NetworkImage(offer["storeLogo"])),
+                                backgroundImage:
+                                    NetworkImage(offer["storeLogo"])),
                           ),
                         ),
                       ),
