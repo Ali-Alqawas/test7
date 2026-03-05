@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:test/presentation/screens/categories/category_offers_screen.dart';
 import '../network/api_service.dart';
 import '../network/api_constants.dart';
 import '../theme/app_colors.dart';
@@ -59,7 +60,8 @@ class _PremiumCategoriesBarState extends State<PremiumCategoriesBar> {
           _categories = rawCategories.map<Map<String, dynamic>>((cat) {
             final name = cat['name']?.toString() ?? 'غير معروف';
             return {
-              'id': cat['id']?.toString() ?? '',
+              'id':
+                  cat['id']?.toString() ?? cat['category_id']?.toString() ?? '',
               'name': name,
               'icon': _iconMap[name] ?? Icons.category_rounded,
               'image': cat['image'] != null
@@ -119,55 +121,77 @@ class _PremiumCategoriesBarState extends State<PremiumCategoriesBar> {
                         return _buildSeeAllButton(widget.isDarkMode);
                       }
                       final cat = _categories[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Column(
-                          children: [
-                            Container(
-                              height: 60,
-                              width: 60,
-                              decoration: BoxDecoration(
-                                color: iconBoxColor,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: widget.isDarkMode
-                                      ? Colors.white.withOpacity(0.05)
-                                      : AppColors.goldenBronze.withOpacity(0.1),
-                                  width: 1,
-                                ),
-                                boxShadow: [
-                                  if (!widget.isDarkMode)
-                                    BoxShadow(
-                                        color: AppColors.goldenBronze
-                                            .withOpacity(0.05),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 4)),
-                                ],
+
+                      // 1. أضفنا GestureDetector هنا
+                      return GestureDetector(
+                        onTap: () {
+                          debugPrint(
+                              "تم الضغط على تصنيف: ${cat['name']} ورقم الـ ID: ${cat['id']}");
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CategoryOffersScreen(
+                                categoryId: cat['id'] ?? '',
+                                categoryName: cat['name'] ?? 'تصنيف',
+                                // 2. هنا الحل السحري للشاشة الحمراء (صورة بديلة إذا كانت null)
+                                categoryImage: cat['image'] ??
+                                    'https://placehold.co/600x600/png?text=No+Image',
                               ),
-                              child: cat['image'] != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Image.network(
-                                        cat['image'],
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => Icon(
-                                            cat['icon'] as IconData,
-                                            color: iconColor,
-                                            size: 28),
-                                      ),
-                                    )
-                                  : Icon(cat['icon'] as IconData,
-                                      color: iconColor, size: 28),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              cat['name'],
-                              style: TextStyle(
-                                  color: textColor.withOpacity(0.8),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          ],
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Column(
+                            children: [
+                              Container(
+                                height: 60,
+                                width: 60,
+                                decoration: BoxDecoration(
+                                  color: iconBoxColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: widget.isDarkMode
+                                        ? Colors.white.withOpacity(0.05)
+                                        : AppColors.goldenBronze
+                                            .withOpacity(0.1),
+                                    width: 1,
+                                  ),
+                                  boxShadow: [
+                                    if (!widget.isDarkMode)
+                                      BoxShadow(
+                                          color: AppColors.goldenBronze
+                                              .withOpacity(0.05),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4)),
+                                  ],
+                                ),
+                                child: cat['image'] != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: Image.network(
+                                          cat['image'],
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Icon(
+                                              cat['icon'] as IconData,
+                                              color: iconColor,
+                                              size: 28),
+                                        ),
+                                      )
+                                    : Icon(cat['icon'] as IconData,
+                                        color: iconColor, size: 28),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                cat['name'],
+                                style: TextStyle(
+                                    color: textColor.withOpacity(0.8),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },

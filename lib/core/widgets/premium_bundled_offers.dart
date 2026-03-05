@@ -94,18 +94,29 @@ class _PremiumBundledOffersSectionState
       if (rawBundles.isNotEmpty && mounted) {
         setState(() {
           _bundles = rawBundles.map<Map<String, dynamic>>((b) {
-            String storeName = b['store_name']?.toString() ?? 'متجر';
+            // 1. استخراج اسم المتجر بقوة أكبر
+            String storeName = b['store_name']?.toString().trim() ?? '';
+            if (storeName.isEmpty &&
+                b['products'] != null &&
+                (b['products'] as List).isNotEmpty) {
+              storeName =
+                  b['products'][0]['store_name']?.toString().trim() ?? 'متجر';
+            }
+            if (storeName.isEmpty || storeName == 'null') storeName = 'متجر';
 
-            // حساب التوفير
-            double price = double.tryParse(b['price']?.toString() ?? '0') ?? 0;
-            double oldPrice =
-                double.tryParse(b['old_price']?.toString() ?? '0') ?? 0;
-            double saving = oldPrice > price ? oldPrice - price : 0;
-
-            // جمع صور المنتجات
+            // 2. سعر الباقة المعروض للعميل
+            double bundlePrice =
+                double.tryParse(b['price']?.toString() ?? '0') ?? 0;
+            double sumOfIndividualPrices = 0;
+            // 2. جمع صور المنتجات + حساب المجموع الفردي
             List<String> images = [];
             if (b['products'] is List) {
               for (var p in b['products']) {
+                // 💡 السر هنا: نجمع سعر كل منتج
+                double pPrice =
+                    double.tryParse(p['price']?.toString() ?? '0') ?? 0;
+                sumOfIndividualPrices += pPrice;
+
                 if (p['images'] is List && (p['images'] as List).isNotEmpty) {
                   images.add(ApiConstants.resolveImageUrl(
                       p['images'][0]['image_url']?.toString()));
@@ -119,21 +130,49 @@ class _PremiumBundledOffersSectionState
               images.add(ApiConstants.resolveImageUrl(b['image'].toString()));
             }
             if (images.isEmpty) {
-              images.add(ApiConstants.resolveImageUrl(null));
+              images.add('https://placehold.co/400x400/png?text=No+Image');
+            }
+
+            // 3. الحساب الديناميكي للتوفير
+            double saving = 0;
+            double displayOldPrice = 0;
+
+            // إذا كان المجموع الفردي أكبر من سعر الباقة، هذا توفير حقيقي
+            if (sumOfIndividualPrices > bundlePrice && bundlePrice > 0) {
+              saving = sumOfIndividualPrices - bundlePrice;
+              displayOldPrice = sumOfIndividualPrices;
+            } else {
+              // خطة بديلة من الباك إند
+              double explicitOldPrice =
+                  double.tryParse(b['old_price']?.toString() ?? '0') ?? 0;
+              if (explicitOldPrice > bundlePrice) {
+                saving = explicitOldPrice - bundlePrice;
+                displayOldPrice = explicitOldPrice;
+              }
             }
 
             return {
-              "id": b['id']?.toString() ?? '',
-              "title": b['title']?.toString() ?? 'باقة',
-              "store": storeName,
+              // الباك إند يرسل المعرف باسم group_id
+              "id": b['group_id']?.toString() ?? b['id']?.toString() ?? '',
+
+              // الباك إند يرسل الاسم باسم name وليس title
+              "title":
+                  b['name']?.toString() ?? b['title']?.toString() ?? 'باقة',
+              "store": storeName, // تركناها لكي لا يتأثر تصميمك القديم
+              "storeName": storeName, // أضفناها لكي تعمل شاشة التفاصيل بامتياز
               "storeLogo": b['store_logo'] != null
                   ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
                   : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff',
-              "price": "${b['price'] ?? '0'}\$",
-              "oldPrice": oldPrice > 0 ? "${b['old_price']}\$" : "",
-              "saving": saving > 0 ? "وفر ${saving.toStringAsFixed(0)}\$" : "",
+              // عرض الأسعار بعد الحساب الديناميكي
+              // تم إزالة الأصفار العشرية هنا
+              "price": bundlePrice > 0 ? "${bundlePrice.toInt()}\$" : "0\$",
+              "oldPrice":
+                  displayOldPrice > 0 ? "${displayOldPrice.toInt()}\$" : "",
+              "saving": saving > 0 ? "وفر ${saving.toInt()}\$" : "",
               "images": images,
               "isLocalImage": false,
+              "original_data":
+                  b, // 🛡️ حماية من الشاشة الحمراء عند الدخول للتفاصيل
             };
           }).toList();
           _isLoading = false;
@@ -147,7 +186,7 @@ class _PremiumBundledOffersSectionState
         }
       }
     } catch (e) {
-      debugPrint('خطأ في جلب الباقات: $e');
+      debugPrint('خطأ في جلب الباقات الرئيسية: $e');
       if (mounted) {
         setState(() {
           _bundles = List.from(_fallbackBundles);

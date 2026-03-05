@@ -31,6 +31,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     try {
       final data = await _api.get(ApiConstants.favorites);
 
+      debugPrint('بيانات المفضلة القادمة من الباك إند: $data');
+
       final List rawFavorites =
           data is Map ? (data['results'] ?? []) : (data is List ? data : []);
 

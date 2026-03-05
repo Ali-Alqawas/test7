@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../network/api_service.dart';
+import '../network/api_constants.dart';
 
 class OfferActionButtons extends StatefulWidget {
   final bool isDarkMode;
@@ -69,21 +71,56 @@ class _OfferActionButtonsState extends State<OfferActionButtons>
     super.dispose();
   }
 
-  void _toggleLike() {
+void _toggleLike() async {
+    // 1. التحديث المرئي الفوري (Optimistic UI)
     setState(() {
       isLiked = !isLiked;
     });
     if (isLiked) {
       _likeController.forward(from: 0.0);
     }
+try {
+      await ApiService().post(
+        ApiConstants.toggleLike(widget.offerId),
+      );
+      // نجح الطلب، لا داعي لعمل شيء آخر
+    } catch (e) {
+      // 3. التراجع في حال الفشل
+      setState(() {
+        isLiked = !isLiked;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('حدث خطأ، يرجى المحاولة لاحقاً')),
+        );
+      }
+    }
   }
-
-  void _toggleFavorite() {
+  void _toggleFavorite() async {
+    // 1. التحديث المرئي الفوري (Optimistic UI)
     setState(() {
       isFavorited = !isFavorited;
     });
     if (isFavorited) {
       _favController.forward(from: 0.0);
+    }
+
+    // 2. إرسال الطلب للباك إند
+    try {
+      await ApiService().post(
+        ApiConstants.toggleFavorite(widget.offerId),
+      );
+      // نجح الطلب
+    } catch (e) {
+      // 3. التراجع في حال الفشل
+      setState(() {
+        isFavorited = !isFavorited;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('حدث خطأ، يرجى المحاولة لاحقاً')),
+        );
+      }
     }
   }
 
