@@ -1,8 +1,142 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 
-class DrawsScreen extends StatelessWidget {
+import '../../../data/providers/auth_provider.dart';
+
+class DrawsScreen extends StatefulWidget {
   const DrawsScreen({super.key});
+
+  @override
+  State<DrawsScreen> createState() => _DrawsScreenState();
+}
+
+class _DrawsScreenState extends State<DrawsScreen> {
+  List<Map<String, dynamic>> _draws = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDraws();
+  }
+
+  Future<void> _loadDraws() async {
+    setState(() => _loading = true);
+    final auth = context.read<AuthProvider>();
+    final draws = await auth.fetchDraws();
+    if (mounted) {
+      setState(() {
+        _draws = draws;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _enterDraw(Map<String, dynamic> draw) async {
+    final id = (draw['draw_id'] ?? draw['id'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    final pts = draw['points_required'] ?? 0;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final textC = isDark ? AppColors.pureWhite : AppColors.lightText;
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: isDark ? AppColors.deepNavy : Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text("تأكيد الدخول",
+                style: TextStyle(
+                    color: textC, fontWeight: FontWeight.w900, fontSize: 18)),
+            content: Text(
+                "هل أنت متأكد من دخول السحب؟\n\nسيتم خصم $pts نقطة من رصيدك.",
+                style: TextStyle(color: textC.withOpacity(0.7), fontSize: 14)),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text("إلغاء",
+                      style: TextStyle(color: textC.withOpacity(0.5)))),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.goldenBronze,
+                    foregroundColor: AppColors.deepNavy,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10))),
+                child: const Text("دخول السحب",
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final success = await auth.enterDraw(id);
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text("تم تسجيلك في السحب بنجاح 🎉"),
+        backgroundColor: AppColors.goldenBronze,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+      _loadDraws();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(auth.errorMessage ?? 'فشل الدخول في السحب'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // حساب الوقت المتبقي
+  // ────────────────────────────────────────────
+  String _timeRemaining(String? endDateStr) {
+    if (endDateStr == null || endDateStr.isEmpty) return '';
+    try {
+      final endDate = DateTime.parse(endDateStr);
+      final now = DateTime.now();
+      final diff = endDate.difference(now);
+      if (diff.isNegative) return 'منتهي';
+      if (diff.inDays > 0) return 'متبقي ${diff.inDays} يوم';
+      if (diff.inHours > 0) return 'متبقي ${diff.inHours} ساعة';
+      return 'متبقي ${diff.inMinutes} دقيقة';
+    } catch (_) {
+      return endDateStr;
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // تحويل حالة السحب للعربية
+  // ────────────────────────────────────────────
+  Map<String, dynamic> _statusInfo(String status) {
+    switch (status.toUpperCase()) {
+      case 'ACTIVE':
+        return {'text': 'جاري', 'color': Colors.green, 'canEnter': true};
+      case 'UPCOMING':
+        return {'text': 'قريباً', 'color': Colors.blue, 'canEnter': false};
+      case 'ENDED':
+        return {'text': 'منتهي', 'color': Colors.grey, 'canEnter': false};
+      case 'CANCELLED':
+        return {'text': 'ملغي', 'color': AppColors.error, 'canEnter': false};
+      default:
+        return {'text': status, 'color': AppColors.grey, 'canEnter': false};
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,45 +147,6 @@ class DrawsScreen extends StatelessWidget {
     final borderC = isDark
         ? AppColors.goldenBronze.withOpacity(0.15)
         : Colors.grey.shade200;
-
-    final draws = [
-      {
-        "title": "سحب iPhone 16 Pro Max",
-        "image":
-            "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=500&q=80",
-        "points": 200,
-        "endDate": "28 فبراير",
-        "participants": 1240,
-        "status": "active"
-      },
-      {
-        "title": "سحب PlayStation 5",
-        "image":
-            "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=500&q=80",
-        "points": 150,
-        "endDate": "5 مارس",
-        "participants": 890,
-        "status": "active"
-      },
-      {
-        "title": "سحب AirPods Pro",
-        "image":
-            "https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?auto=format&fit=crop&w=500&q=80",
-        "points": 80,
-        "endDate": "1 مارس",
-        "participants": 2100,
-        "status": "active"
-      },
-      {
-        "title": "سحب ساعة Apple Watch",
-        "image":
-            "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80",
-        "points": 100,
-        "endDate": "10 مارس",
-        "participants": 560,
-        "status": "active"
-      },
-    ];
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -69,110 +164,166 @@ class DrawsScreen extends StatelessWidget {
                   color: textC, fontSize: 18, fontWeight: FontWeight.w900)),
           centerTitle: true,
         ),
-        body: ListView.builder(
-          padding: const EdgeInsets.all(20),
-          itemCount: draws.length,
-          itemBuilder: (ctx, i) {
-            final d = draws[i];
-            return GestureDetector(
-              onTap: () => _showDrawDetails(ctx, d, isDark, textC, cardC),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 16),
+        body: _loading
+            ? const Center(
+                child: CircularProgressIndicator(
+                    color: AppColors.goldenBronze, strokeWidth: 2))
+            : _draws.isEmpty
+                ? Center(
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                        Icon(Icons.card_giftcard_rounded,
+                            color: textC.withOpacity(0.2), size: 64),
+                        const SizedBox(height: 16),
+                        Text("لا توجد سحوبات حالياً",
+                            style: TextStyle(
+                                color: textC.withOpacity(0.4),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        Text("عد لاحقاً لمشاهدة السحوبات الجديدة",
+                            style: TextStyle(
+                                color: textC.withOpacity(0.3), fontSize: 13)),
+                      ]))
+                : RefreshIndicator(
+                    color: AppColors.goldenBronze,
+                    onRefresh: _loadDraws,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: _draws.length,
+                      itemBuilder: (ctx, i) {
+                        final d = _draws[i];
+                        return _buildDrawCard(d, isDark, textC, cardC, borderC);
+                      },
+                    ),
+                  ),
+      ),
+    );
+  }
+
+  Widget _buildDrawCard(Map<String, dynamic> d, bool isDark, Color textC,
+      Color cardC, Color borderC) {
+    final name = d['name'] ?? 'سحب';
+    final description = d['description'] ?? '';
+    final conditions = d['conditions'] ?? '';
+    final pointsRequired = d['points_required'] ?? 0;
+    final endDate = d['end_date'] ?? '';
+    final startDate = d['start_date'] ?? '';
+    final entriesCount = d['entries_count'] ?? 0;
+    final status = (d['status'] ?? 'ACTIVE').toString();
+    final sInfo = _statusInfo(status);
+    final bool canEnter = sInfo['canEnter'] == true;
+    final remaining = _timeRemaining(endDate.toString());
+
+    return GestureDetector(
+      onTap: () => _showDrawDetails(d, isDark, textC, cardC),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: cardC,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderC),
+          boxShadow: [
+            if (!isDark)
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+          ],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Header with gradient
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [
+                AppColors.goldenBronze.withOpacity(0.15),
+                AppColors.goldenBronze.withOpacity(0.05),
+              ], begin: Alignment.topRight, end: Alignment.bottomLeft),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(19)),
+            ),
+            child: Row(children: [
+              Container(
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
-                  color: cardC,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: borderC),
-                  boxShadow: [
-                    if (!isDark)
-                      BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4))
-                  ],
-                ),
+                    color: AppColors.goldenBronze.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.card_giftcard_rounded,
+                    color: AppColors.goldenBronze, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(19)),
-                        child: Stack(children: [
-                          Image.network(d["image"] as String,
-                              height: 160,
-                              width: double.infinity,
-                              fit: BoxFit.cover),
-                          Positioned(
-                            top: 12,
-                            left: 12,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  borderRadius: BorderRadius.circular(8)),
-                              child: const Text("جاري",
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ]),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(d["title"] as String,
-                                  style: TextStyle(
-                                      color: textC,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w800)),
-                              const SizedBox(height: 10),
-                              Row(children: [
-                                _info(
-                                    Icons.stars_rounded,
-                                    "${d["points"]} نقطة للدخول",
-                                    AppColors.goldenBronze),
-                                const SizedBox(width: 16),
-                                _info(
-                                    Icons.people_rounded,
-                                    "${d["participants"]} مشارك",
-                                    textC.withOpacity(0.5)),
-                              ]),
-                              const SizedBox(height: 6),
-                              _info(
-                                  Icons.timer_rounded,
-                                  "ينتهي ${d["endDate"]}",
-                                  textC.withOpacity(0.5)),
-                              const SizedBox(height: 14),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: () {},
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.goldenBronze,
-                                    foregroundColor: AppColors.deepNavy,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12)),
-                                  ),
-                                  child: const Text("دخول السحب",
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14)),
-                                ),
-                              ),
-                            ]),
-                      ),
+                      Text(name.toString(),
+                          style: TextStyle(
+                              color: textC,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800)),
+                      if (description.toString().isNotEmpty)
+                        Text(description.toString(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: textC.withOpacity(0.5), fontSize: 12)),
                     ]),
               ),
-            );
-          },
-        ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                    color: (sInfo['color'] as Color).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text(sInfo['text'] as String,
+                    style: TextStyle(
+                        color: sInfo['color'] as Color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ]),
+          ),
+          // Details
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                _info(Icons.stars_rounded, "$pointsRequired نقطة للدخول",
+                    AppColors.goldenBronze),
+                const SizedBox(width: 16),
+                _info(Icons.people_rounded, "$entriesCount مشارك",
+                    textC.withOpacity(0.5)),
+              ]),
+              if (remaining.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _info(Icons.timer_rounded, remaining, textC.withOpacity(0.5)),
+              ],
+              if (canEnter) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _enterDraw(d),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.goldenBronze,
+                      foregroundColor: AppColors.deepNavy,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("دخول السحب 🎉",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                  ),
+                ),
+              ],
+            ]),
+          ),
+        ]),
       ),
     );
   }
@@ -187,82 +338,189 @@ class DrawsScreen extends StatelessWidget {
     ]);
   }
 
-  void _showDrawDetails(BuildContext ctx, Map<String, dynamic> d, bool isDark,
-      Color textC, Color cardC) {
+  void _showDrawDetails(
+      Map<String, dynamic> d, bool isDark, Color textC, Color cardC) {
+    final name = d['name'] ?? 'سحب';
+    final description = d['description'] ?? '';
+    final conditions = d['conditions'] ?? '';
+    final pointsRequired = d['points_required'] ?? 0;
+    final endDate = d['end_date'] ?? '';
+    final startDate = d['start_date'] ?? '';
+    final entriesCount = d['entries_count'] ?? 0;
+    final status = (d['status'] ?? 'ACTIVE').toString();
+    final sInfo = _statusInfo(status);
+    final bool canEnter = sInfo['canEnter'] == true;
+    final remaining = _timeRemaining(endDate.toString());
+
+    // تنسيق التاريخ
+    String formatDate(String dateStr) {
+      try {
+        final dt = DateTime.parse(dateStr);
+        return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')}';
+      } catch (_) {
+        return dateStr;
+      }
+    }
+
     showModalBottomSheet(
-      context: ctx,
+      context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => Container(
-        height: MediaQuery.of(ctx).size.height * 0.75,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.deepNavy : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(
-              child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(10)))),
-          const SizedBox(height: 20),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.network(d["image"] as String,
-                height: 200, width: double.infinity, fit: BoxFit.cover),
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.deepNavy : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
           ),
-          const SizedBox(height: 16),
-          Text(d["title"] as String,
-              style: TextStyle(
-                  color: textC, fontSize: 20, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-                color: cardC,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: isDark ? Colors.white10 : Colors.grey.shade200)),
-            child: Column(children: [
-              _detailRow("النقاط المطلوبة", "${d["points"]} نقطة", textC),
-              Divider(
-                  color: isDark ? Colors.white10 : Colors.grey.shade200,
-                  height: 20),
-              _detailRow("عدد المشاركين", "${d["participants"]}", textC),
-              Divider(
-                  color: isDark ? Colors.white10 : Colors.grey.shade200,
-                  height: 20),
-              _detailRow("تاريخ الانتهاء", d["endDate"] as String, textC),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(
+                child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(10)))),
+            const SizedBox(height: 20),
+            // العنوان والحالة
+            Row(children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                    color: AppColors.goldenBronze.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16)),
+                child: const Icon(Icons.card_giftcard_rounded,
+                    color: AppColors.goldenBronze, size: 30),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(name.toString(),
+                    style: TextStyle(
+                        color: textC,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900)),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                    color: (sInfo['color'] as Color).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10)),
+                child: Text(sInfo['text'] as String,
+                    style: TextStyle(
+                        color: sInfo['color'] as Color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold)),
+              ),
             ]),
-          ),
-          const SizedBox(height: 16),
-          Text("الشروط:",
-              style: TextStyle(
-                  color: textC, fontSize: 14, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Text(
-              "• يجب أن يكون لديك رصيد كافٍ من النقاط\n• السحب عشوائي ومن خلال نظام آلي\n• الجائزة غير قابلة للاستبدال النقدي\n• يتم التواصل مع الفائز خلال 48 ساعة",
-              style: TextStyle(
-                  color: textC.withOpacity(0.6), fontSize: 12, height: 1.7)),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(ctx),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.goldenBronze,
-                  foregroundColor: AppColors.deepNavy,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14))),
-              child: const Text("دخول السحب 🎉",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 20),
+            // التفاصيل
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  color: cardC,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: isDark ? Colors.white10 : Colors.grey.shade200)),
+              child: Column(children: [
+                _detailRow("النقاط المطلوبة", "$pointsRequired نقطة", textC),
+                Divider(
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                    height: 20),
+                _detailRow("عدد المشاركين", "$entriesCount", textC),
+                Divider(
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                    height: 20),
+                _detailRow(
+                    "تاريخ البداية", formatDate(startDate.toString()), textC),
+                Divider(
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                    height: 20),
+                _detailRow(
+                    "تاريخ الانتهاء", formatDate(endDate.toString()), textC),
+                if (remaining.isNotEmpty) ...[
+                  Divider(
+                      color: isDark ? Colors.white10 : Colors.grey.shade200,
+                      height: 20),
+                  _detailRow("الوقت المتبقي", remaining, textC),
+                ],
+              ]),
             ),
-          ),
-        ]),
+            // الوصف
+            if (description.toString().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text("الوصف",
+                  style: TextStyle(
+                      color: textC, fontSize: 14, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text(description.toString(),
+                  style: TextStyle(
+                      color: textC.withOpacity(0.6),
+                      fontSize: 13,
+                      height: 1.7)),
+            ],
+            // الشروط
+            if (conditions.toString().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text("الشروط",
+                  style: TextStyle(
+                      color: textC, fontSize: 14, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text(conditions.toString(),
+                  style: TextStyle(
+                      color: textC.withOpacity(0.6),
+                      fontSize: 13,
+                      height: 1.7)),
+            ],
+            const Spacer(),
+            if (canEnter)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _enterDraw(d);
+                  },
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.goldenBronze,
+                      foregroundColor: AppColors.deepNavy,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14))),
+                  child: const Text("دخول السحب 🎉",
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: (sInfo['color'] as Color).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Center(
+                    child: Text(
+                      status.toUpperCase() == 'UPCOMING'
+                          ? "السحب لم يبدأ بعد"
+                          : "السحب منتهي",
+                      style: TextStyle(
+                          color: sInfo['color'] as Color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15),
+                    ),
+                  ),
+                ),
+              ),
+          ]),
+        ),
       ),
     );
   }

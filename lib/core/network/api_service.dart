@@ -115,10 +115,29 @@ class ApiService {
     Map<String, String>? extraFields,
     bool requiresAuth = true,
   }) async {
+    return uploadFileWithMethod(
+      endpoint,
+      method: 'POST',
+      filePath: filePath,
+      fieldName: fieldName,
+      extraFields: extraFields,
+      requiresAuth: requiresAuth,
+    );
+  }
+
+  /// Multipart request بأي HTTP method (POST, PATCH, PUT)
+  Future<dynamic> uploadFileWithMethod(
+    String endpoint, {
+    required String filePath,
+    String method = 'POST',
+    String fieldName = 'file',
+    Map<String, String>? extraFields,
+    bool requiresAuth = true,
+  }) async {
     final uri = _buildUri(endpoint);
     final token = requiresAuth ? await TokenManager.getAccessToken() : null;
 
-    final request = http.MultipartRequest('POST', uri);
+    final request = http.MultipartRequest(method, uri);
 
     if (token != null) {
       request.headers['Authorization'] = 'Bearer $token';

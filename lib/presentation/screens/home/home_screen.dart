@@ -23,6 +23,7 @@ import '../favorites/favorites_screen.dart';
 import '../profile/profile_screen.dart';
 import '../search/search_screen.dart';
 import '../notifications/notifications_screen.dart';
+import 'package:test/data/providers/social_provider.dart';
 
 // ============================================================================
 // الشاشة الرئيسية (Home Screen)
@@ -37,10 +38,20 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
+  // =========== أضف هذه الدالة هنا بالضبط ===========
+  @override
+  void initState() {
+    super.initState();
+
+    // تأجيل الاستدعاء حتى يكتمل بناء الشاشة لتجنب أي أخطاء في الـ Context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<SocialProvider>(context, listen: false).fetchUserSocialData();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     return Stack(
       children: [
         Scaffold(

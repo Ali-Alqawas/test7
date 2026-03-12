@@ -19,6 +19,13 @@ class AuthProvider extends ChangeNotifier {
   // بيانات المستخدم الأساسية
   Map<String, dynamic>? _userProfile;
 
+  // بيانات إضافية
+  Map<String, dynamic>? _accountData;
+  List<Map<String, dynamic>> _phones = [];
+  int _pointsBalance = 0;
+  String? _referralCode;
+  Map<String, dynamic>? _referralStats;
+
   // ────────────────────────────────────────────
   // Getters
   // ────────────────────────────────────────────
@@ -27,19 +34,46 @@ class AuthProvider extends ChangeNotifier {
   bool get hasCompletedInterests => _hasCompletedInterests;
   String? get errorMessage => _errorMessage;
   Map<String, dynamic>? get userProfile => _userProfile;
+  Map<String, dynamic>? get accountData => _accountData;
+  List<Map<String, dynamic>> get phones => _phones;
+  int get pointsBalance => _pointsBalance;
+  String? get referralCode => _referralCode;
+  Map<String, dynamic>? get referralStats => _referralStats;
 
   /// اسم المستخدم من البروفايل — أو "مستخدم" كقيمة افتراضية
   String get userName =>
-      _userProfile?['username'] ?? _userProfile?['full_name'] ?? 'مستخدم';
+      _userProfile?['full_name'] ?? _userProfile?['username'] ?? 'مستخدم';
 
   /// صورة المستخدم من البروفايل
-  String get userImage =>
-      _userProfile?['profile_image'] ??
-      _userProfile?['avatar'] ??
-      'https://ui-avatars.com/api/?name=${Uri.encodeComponent(userName)}&background=B8860B&color=fff&size=150';
+  String get userImage {
+    final img = _userProfile?['profile_image'] ?? _userProfile?['avatar'];
+    if (img != null && img.toString().isNotEmpty) {
+      return ApiConstants.resolveImageUrl(img.toString());
+    }
+    return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(userName)}&background=B8860B&color=fff&size=150';
+  }
 
   /// البريد الإلكتروني
-  String get userEmail => _userProfile?['email'] ?? '';
+  String get userEmail =>
+      _accountData?['email'] ??
+      _userProfile?['account']?['email'] ??
+      _userProfile?['email'] ??
+      '';
+
+  /// نوع الحساب
+  String get accountType =>
+      _accountData?['account_type'] ??
+      _userProfile?['account']?['account_type'] ??
+      'Personal';
+
+  /// رقم الهاتف الأساسي
+  String get primaryPhone {
+    final primary = _phones.firstWhere(
+      (p) => p['is_primary'] == true,
+      orElse: () => _phones.isNotEmpty ? _phones.first : {},
+    );
+    return primary['phone_number'] ?? '';
+  }
 
   // ────────────────────────────────────────────
   // تهيئة — التحقق من وجود توكن محفوظ
@@ -286,6 +320,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> changePassword({
     required String oldPassword,
     required String newPassword,
+    required String confirmNewPassword,
   }) async {
     _setLoading(true);
     _clearError();
@@ -296,6 +331,7 @@ class AuthProvider extends ChangeNotifier {
         body: {
           'old_password': oldPassword,
           'new_password': newPassword,
+          'new_password2': confirmNewPassword,
         },
       );
       return true;
@@ -318,9 +354,446 @@ class AuthProvider extends ChangeNotifier {
     try {
       final data = await _api.get(ApiConstants.profile);
       _userProfile = data is Map<String, dynamic> ? data : null;
+
+      // استخراج بيانات الحساب من البروفايل إذا موجودة
+      if (_userProfile?['account'] != null) {
+        _accountData = Map<String, dynamic>.from(_userProfile!['account']);
+        _pointsBalance = _accountData?['points_balance'] ?? 0;
+      }
+
+      // استخراج أرقام الهاتف من البروفايل إذا موجودة
+      if (_userProfile?['phones'] != null) {
+        _phones = List<Map<String, dynamic>>.from(
+          (_userProfile!['phones'] as List)
+              .map((p) => Map<String, dynamic>.from(p)),
+        );
+      }
+
       notifyListeners();
     } catch (e) {
       rethrow;
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // تحديث الملف الشخصي (PATCH)
+  // ────────────────────────────────────────────
+
+  Future<bool> updateProfile({
+    String? username,
+    String? fullName,
+    String? profileImagePath,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      if (profileImagePath != null && profileImagePath.isNotEmpty) {
+        // رفع مع صورة — multipart PATCH
+        final fields = <String, String>{};
+        if (username != null) fields['username'] = username;
+        if (fullName != null) fields['full_name'] = fullName;
+
+        await _api.uploadFileWithMethod(
+          ApiConstants.profile,
+          method: 'PATCH',
+          filePath: profileImagePath,
+          fieldName: 'profile_image',
+          extraFields: fields,
+        );
+      } else {
+        // تحديث بدون صورة — JSON PATCH
+        final body = <String, dynamic>{};
+        if (username != null) body['username'] = username;
+        if (fullName != null) body['full_name'] = fullName;
+
+        await _api.patch(ApiConstants.profile, body: body);
+      }
+
+      // تحديث البيانات المحلية
+      await fetchProfile();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('فشل الاتصال بالخادم.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // جلب بيانات الحساب
+  // ────────────────────────────────────────────
+
+  Future<void> fetchAccount() async {
+    try {
+      final data = await _api.get(ApiConstants.account);
+      if (data is Map<String, dynamic>) {
+        _accountData = data;
+        _pointsBalance = data['points_balance'] ?? 0;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('❌ fetchAccount error: $e');
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // أرقام الهاتف
+  // ────────────────────────────────────────────
+
+  Future<void> fetchPhones() async {
+    try {
+      final data = await _api.get(ApiConstants.phones);
+      if (data is Map<String, dynamic> && data['results'] != null) {
+        _phones = List<Map<String, dynamic>>.from(
+          (data['results'] as List).map((p) => Map<String, dynamic>.from(p)),
+        );
+      } else if (data is List) {
+        _phones = List<Map<String, dynamic>>.from(
+          data.map((p) => Map<String, dynamic>.from(p)),
+        );
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ fetchPhones error: $e');
+    }
+  }
+
+  Future<bool> addPhone({
+    required String phoneNumber,
+    String type = 'Mobile',
+    bool isPrimary = false,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _api.post(ApiConstants.phones, body: {
+        'phone_number': phoneNumber,
+        'type': type,
+        'is_primary': isPrimary,
+      });
+      await fetchPhones();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('فشل الاتصال بالخادم.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // النقاط والمكافآت
+  // ────────────────────────────────────────────
+
+  Future<Map<String, dynamic>?> fetchPointsBalance() async {
+    try {
+      final data = await _api.get(ApiConstants.pointsBalance);
+      if (data is Map<String, dynamic>) {
+        _pointsBalance =
+            data['balance'] ?? data['points_balance'] ?? data['points'] ?? 0;
+        notifyListeners();
+        return data;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ fetchPointsBalance error: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchPointsHistory() async {
+    try {
+      final data = await _api.get(ApiConstants.pointsHistory);
+      if (data is Map<String, dynamic> && data['results'] != null) {
+        return List<Map<String, dynamic>>.from(
+          (data['results'] as List).map((p) => Map<String, dynamic>.from(p)),
+        );
+      } else if (data is List) {
+        return List<Map<String, dynamic>>.from(
+          data.map((p) => Map<String, dynamic>.from(p)),
+        );
+      }
+      return [];
+    } catch (e) {
+      debugPrint('❌ fetchPointsHistory error: $e');
+      return [];
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // رمز الإحالة
+  // ────────────────────────────────────────────
+
+  Future<void> fetchReferralCode() async {
+    try {
+      final data = await _api.get(ApiConstants.rewardsReferralCode);
+      if (data is Map<String, dynamic>) {
+        _referralCode = data['referral_code'] ??
+            data['code'] ??
+            data.values.first?.toString();
+      } else if (data is String) {
+        _referralCode = data;
+      }
+      notifyListeners();
+    } catch (e) {
+      // fallback من auth endpoint
+      try {
+        final data = await _api.get(ApiConstants.referralCode);
+        if (data is Map<String, dynamic>) {
+          _referralCode = data['referral_code'] ??
+              data['code'] ??
+              data.values.first?.toString();
+        }
+        notifyListeners();
+      } catch (_) {
+        debugPrint('❌ fetchReferralCode error: $e');
+      }
+    }
+  }
+
+  Future<void> fetchReferralStats() async {
+    try {
+      final data = await _api.get(ApiConstants.rewardsReferralStats);
+      if (data is Map<String, dynamic>) {
+        _referralStats = data;
+        notifyListeners();
+      }
+    } catch (e) {
+      try {
+        final data = await _api.get(ApiConstants.referralStats);
+        if (data is Map<String, dynamic>) {
+          _referralStats = data;
+          notifyListeners();
+        }
+      } catch (_) {
+        debugPrint('❌ fetchReferralStats error: $e');
+      }
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // السحوبات
+  // ────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> fetchDraws() async {
+    try {
+      final data = await _api.get(ApiConstants.draws);
+      if (data is Map<String, dynamic> && data['results'] != null) {
+        return List<Map<String, dynamic>>.from(
+          (data['results'] as List).map((d) => Map<String, dynamic>.from(d)),
+        );
+      } else if (data is List) {
+        return List<Map<String, dynamic>>.from(
+          data.map((d) => Map<String, dynamic>.from(d)),
+        );
+      }
+      return [];
+    } catch (e) {
+      debugPrint('❌ fetchDraws error: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchCurrentDraw() async {
+    try {
+      final data = await _api.get(ApiConstants.currentDraw);
+      if (data is Map<String, dynamic>) return data;
+      return null;
+    } catch (e) {
+      debugPrint('❌ fetchCurrentDraw error: $e');
+      return null;
+    }
+  }
+
+  Future<bool> enterDraw(String drawId) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _api.post(ApiConstants.enterDraw(drawId), body: {});
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('فشل الاتصال بالخادم.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // تذاكر الدعم الفني
+  // ────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> fetchTickets() async {
+    try {
+      final data = await _api.get(ApiConstants.tickets);
+      if (data is Map<String, dynamic> && data['results'] != null) {
+        return List<Map<String, dynamic>>.from(
+          (data['results'] as List).map((t) => Map<String, dynamic>.from(t)),
+        );
+      } else if (data is List) {
+        return List<Map<String, dynamic>>.from(
+          data.map((t) => Map<String, dynamic>.from(t)),
+        );
+      }
+      return [];
+    } catch (e) {
+      debugPrint('❌ fetchTickets error: $e');
+      return [];
+    }
+  }
+
+  Future<bool> createTicket({
+    required String description,
+    required String issueType,
+    String? imagePath,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      if (imagePath != null && imagePath.isNotEmpty) {
+        // مع صورة — multipart POST
+        await _api.uploadFile(
+          ApiConstants.tickets,
+          filePath: imagePath,
+          fieldName: 'image_url',
+          extraFields: {
+            'description': description,
+            'issue_type': issueType,
+            'status': 'OPEN',
+          },
+        );
+      } else {
+        // بدون صورة — JSON POST
+        await _api.post(ApiConstants.tickets, body: {
+          'description': description,
+          'issue_type': issueType,
+          'status': 'OPEN',
+        });
+      }
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('فشل الاتصال بالخادم.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> replyTicket(String ticketId, String message) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _api.post(
+        ApiConstants.replyTicket(ticketId),
+        body: {'message': message},
+      );
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('فشل الاتصال بالخادم.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> closeTicket(String ticketId) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _api.post(ApiConstants.closeTicket(ticketId), body: {});
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('فشل الاتصال بالخادم.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // ────────────────────────────────────────────
+  // 💬 التعليقات
+  // ────────────────────────────────────────────
+
+  /// جلب تعليقات منتج معين
+  Future<List<Map<String, dynamic>>> fetchProductComments(
+      String productId) async {
+    try {
+      final data = await _api.get(
+        ApiConstants.productComments(productId),
+      );
+      final List raw =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+      return raw.cast<Map<String, dynamic>>();
+    } on ApiException catch (e) {
+      debugPrint('خطأ جلب التعليقات: ${e.message}');
+      return [];
+    } catch (e) {
+      debugPrint('خطأ جلب التعليقات: $e');
+      return [];
+    }
+  }
+
+  /// إضافة تعليق جديد — POST /social/products/{id}/comments/
+  Future<Map<String, dynamic>?> addComment({
+    required int productId,
+    required String text,
+  }) async {
+    try {
+      final body = {
+        'text': text,
+      };
+      debugPrint(
+          '📤 addComment → POST ${ApiConstants.productComments(productId.toString())} body: $body');
+      final data = await _api.post(
+        ApiConstants.productComments(productId.toString()),
+        body: body,
+      );
+      return data is Map<String, dynamic> ? data : null;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return null;
+    } catch (e) {
+      _setError('فشل إرسال التعليق.');
+      return null;
+    }
+  }
+
+  /// حذف تعليق (204 No Content)
+  Future<bool> deleteComment(int commentId) async {
+    try {
+      await _api.delete(ApiConstants.deleteComment(commentId));
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('فشل حذف التعليق.');
+      return false;
     }
   }
 
@@ -338,6 +811,11 @@ class AuthProvider extends ChangeNotifier {
       await TokenManager.clearAll();
       _isLoggedIn = false;
       _userProfile = null;
+      _accountData = null;
+      _phones = [];
+      _pointsBalance = 0;
+      _referralCode = null;
+      _referralStats = null;
       _setLoading(false);
       notifyListeners();
     }

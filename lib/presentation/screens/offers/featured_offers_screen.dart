@@ -498,7 +498,6 @@
 //   }
 // }
 
-
 import 'package:flutter/material.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/api_constants.dart';
@@ -539,7 +538,7 @@ class _FeaturedOffersScreenState extends State<FeaturedOffersScreen> {
       // ملاحظة: تأكد أن الباك إند يقبل الفلترة بـ is_featured=true
       final data = await _api.get(
         ApiConstants.products,
-        queryParams: {'is_featured': 'true'}, 
+        queryParams: {'is_featured': 'true'},
         requiresAuth: false,
       );
 
@@ -552,7 +551,8 @@ class _FeaturedOffersScreenState extends State<FeaturedOffersScreen> {
             // معالجة الصور
             var images = product['images'] as List?;
             String imageUrl = (images != null && images.isNotEmpty)
-                ? ApiConstants.resolveImageUrl(images[0]['image_url']?.toString())
+                ? ApiConstants.resolveImageUrl(
+                    images[0]['image_url']?.toString())
                 : ApiConstants.resolveImageUrl(product['image']?.toString());
 
             // معالجة المتجر
@@ -562,15 +562,18 @@ class _FeaturedOffersScreenState extends State<FeaturedOffersScreen> {
                 : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
             // حساب السعر والخصم
-            double price = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
-            double oldPrice = double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
+            double price =
+                double.tryParse(product['price']?.toString() ?? '0') ?? 0;
+            double oldPrice =
+                double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
             String discount = '';
             if (oldPrice > price && oldPrice > 0) {
-              discount = '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
+              discount =
+                  '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
             }
 
             return {
-              "id": product['id']?.toString() ?? '',
+              "id": (product['product_id'] ?? product['id'] ?? '').toString(),
               "title": product['title'] ?? 'بدون عنوان',
               "storeName": storeName,
               "storeLogo": storeLogo,
@@ -596,9 +599,11 @@ class _FeaturedOffersScreenState extends State<FeaturedOffersScreen> {
   List<Map<String, dynamic>> get _filteredOffers {
     if (_searchController.text.isEmpty) return _offers;
     final query = _searchController.text.toLowerCase();
-    return _offers.where((o) =>
-        (o["title"] as String).toLowerCase().contains(query) ||
-        (o["storeName"] as String).toLowerCase().contains(query)).toList();
+    return _offers
+        .where((o) =>
+            (o["title"] as String).toLowerCase().contains(query) ||
+            (o["storeName"] as String).toLowerCase().contains(query))
+        .toList();
   }
 
   @override
@@ -611,7 +616,7 @@ class _FeaturedOffersScreenState extends State<FeaturedOffersScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppColors.deepNavy : AppColors.lightBackground;
-    
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -806,7 +811,7 @@ class _FeaturedOffersScreenState extends State<FeaturedOffersScreen> {
             context,
             MaterialPageRoute(
                 builder: (_) => OfferDetailsScreen(
-                    offerData: offer["original_data"] ?? offer, 
+                    offerData: offer["original_data"] ?? offer,
                     offerType: OfferDetailType.featured))),
         child: Container(
           margin: const EdgeInsets.only(bottom: 14),
@@ -924,10 +929,8 @@ class _FeaturedOffersScreenState extends State<FeaturedOffersScreen> {
                                                       .lineThrough)),
                                       ]),
                                   OfferActionButtons(
-                                      isDarkMode: isDark,
-                                      offerId: offer["id"].toString(),
-                                      initialIsLiked: offer["is_liked"],
-                                      initialIsFavorited: offer["is_favorited"],
+                                    isDarkMode: isDark,
+                                    offerId: offer["id"].toString(),
                                   ),
                                 ]),
                           ],

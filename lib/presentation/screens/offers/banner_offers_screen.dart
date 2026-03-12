@@ -477,7 +477,7 @@ class _BannerOffersScreenState extends State<BannerOffersScreen> {
                                 ]),
                             OfferActionButtons(
                                 isDarkMode: isDarkMode,
-                                offerId: "BANNER_${offer["title"]}"),
+                                offerId: (offer["id"] ?? "").toString()),
                           ],
                         ),
                       ],

@@ -813,7 +813,6 @@
 //   }
 // }
 
-
 import 'package:flutter/material.dart';
 import 'dart:async'; // من أجل الـ Debouncer للبحث
 import '../../../core/network/api_service.dart';
@@ -841,7 +840,7 @@ class _OffersScreenState extends State<OffersScreen> {
 
   List<Map<String, dynamic>> _offers = [];
   bool _isLoading = true;
-  
+
   // حفظ أوامر الفلترة الحالية (Parameters)
   Map<String, String> _currentFilters = {};
 
@@ -849,7 +848,7 @@ class _OffersScreenState extends State<OffersScreen> {
   void initState() {
     super.initState();
     _fetchOffers();
-    
+
     // مراقبة شريط البحث مع تأخير زمني (Debounce) لعدم إرهاق السيرفر
     _searchController.addListener(() {
       if (_debounce?.isActive ?? false) _debounce!.cancel();
@@ -882,14 +881,16 @@ class _OffersScreenState extends State<OffersScreen> {
         requiresAuth: false,
       );
 
-      final List rawOffers = data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+      final List rawOffers =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
 
       if (mounted) {
         setState(() {
           _offers = rawOffers.map<Map<String, dynamic>>((product) {
             var images = product['images'] as List?;
             String imageUrl = (images != null && images.isNotEmpty)
-                ? ApiConstants.resolveImageUrl(images[0]['image_url']?.toString())
+                ? ApiConstants.resolveImageUrl(
+                    images[0]['image_url']?.toString())
                 : ApiConstants.resolveImageUrl(product['image']?.toString());
 
             String storeName = product['store_name']?.toString() ?? 'متجر';
@@ -897,15 +898,18 @@ class _OffersScreenState extends State<OffersScreen> {
                 ? ApiConstants.resolveImageUrl(product['store_logo'].toString())
                 : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
-            double price = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
-            double oldPrice = double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
+            double price =
+                double.tryParse(product['price']?.toString() ?? '0') ?? 0;
+            double oldPrice =
+                double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
             String discount = '';
             if (oldPrice > price && oldPrice > 0) {
-              discount = '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
+              discount =
+                  '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
             }
 
             return {
-              "id": product['id']?.toString() ?? '',
+              "id": (product['product_id'] ?? product['id'] ?? '').toString(),
               "title": product['title'] ?? 'بدون عنوان',
               "storeName": storeName,
               "storeLogo": storeLogo,
@@ -957,7 +961,8 @@ class _OffersScreenState extends State<OffersScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final Color bgColor = isDarkMode ? AppColors.deepNavy : AppColors.lightBackground;
+    final Color bgColor =
+        isDarkMode ? AppColors.deepNavy : AppColors.lightBackground;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -969,7 +974,9 @@ class _OffersScreenState extends State<OffersScreen> {
               _buildHeader(context, isDarkMode),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppColors.goldenBronze))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.goldenBronze))
                     : _offers.isEmpty
                         ? Center(
                             child: Column(
@@ -977,7 +984,8 @@ class _OffersScreenState extends State<OffersScreen> {
                               children: [
                                 Icon(Icons.search_off_rounded,
                                     size: 60,
-                                    color: AppColors.goldenBronze.withOpacity(0.4)),
+                                    color: AppColors.goldenBronze
+                                        .withOpacity(0.4)),
                                 const SizedBox(height: 16),
                                 Text("لا توجد نتائج مطابقة لطلبك",
                                     style: TextStyle(
@@ -994,7 +1002,8 @@ class _OffersScreenState extends State<OffersScreen> {
                             padding: const EdgeInsets.fromLTRB(16, 5, 16, 100),
                             itemCount: _offers.length,
                             itemBuilder: (context, index) {
-                              return _buildOfferCard(_offers[index], isDarkMode);
+                              return _buildOfferCard(
+                                  _offers[index], isDarkMode);
                             },
                           ),
               ),
@@ -1006,7 +1015,8 @@ class _OffersScreenState extends State<OffersScreen> {
   }
 
   Widget _buildHeader(BuildContext context, bool isDarkMode) {
-    final Color textColor = isDarkMode ? AppColors.pureWhite : AppColors.lightText;
+    final Color textColor =
+        isDarkMode ? AppColors.pureWhite : AppColors.lightText;
     final cardC = isDarkMode ? const Color(0xFF072A38) : AppColors.pureWhite;
 
     return Padding(
@@ -1021,27 +1031,35 @@ class _OffersScreenState extends State<OffersScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: isDarkMode ? const Color(0xFF072A38) : AppColors.pureWhite,
+                    color: isDarkMode
+                        ? const Color(0xFF072A38)
+                        : AppColors.pureWhite,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                         color: isDarkMode
                             ? AppColors.goldenBronze.withOpacity(0.3)
                             : Colors.grey.shade300),
                   ),
-                  child: Icon(Icons.arrow_forward_ios_rounded, color: textColor, size: 18),
+                  child: Icon(Icons.arrow_forward_ios_rounded,
+                      color: textColor, size: 18),
                 ),
               ),
               const SizedBox(width: 12),
               Text("جميع العروض 🔥",
-                  style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w900)),
+                  style: TextStyle(
+                      color: textColor,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900)),
               const SizedBox(width: 8),
               if (!_isLoading)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: AppColors.goldenBronze.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.goldenBronze.withOpacity(0.3)),
+                    border: Border.all(
+                        color: AppColors.goldenBronze.withOpacity(0.3)),
                   ),
                   child: Text("${_offers.length}",
                       style: const TextStyle(
@@ -1056,17 +1074,22 @@ class _OffersScreenState extends State<OffersScreen> {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: isDarkMode ? AppColors.pureWhite : AppColors.deepNavy,
+                    color:
+                        isDarkMode ? AppColors.pureWhite : AppColors.deepNavy,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                          color: (isDarkMode ? Colors.black : AppColors.deepNavy).withOpacity(0.15),
+                          color:
+                              (isDarkMode ? Colors.black : AppColors.deepNavy)
+                                  .withOpacity(0.15),
                           blurRadius: 8,
                           offset: const Offset(0, 3))
                     ],
                   ),
                   child: Icon(
-                      isDarkMode ? Icons.wb_sunny_rounded : Icons.nightlight_round,
+                      isDarkMode
+                          ? Icons.wb_sunny_rounded
+                          : Icons.nightlight_round,
                       color: AppColors.goldenBronze,
                       size: 20),
                 ),
@@ -1098,7 +1121,9 @@ class _OffersScreenState extends State<OffersScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 15),
                   child: Row(children: [
                     Icon(Icons.search_rounded,
-                        color: isDarkMode ? AppColors.warmBeige : AppColors.goldenBronze,
+                        color: isDarkMode
+                            ? AppColors.warmBeige
+                            : AppColors.goldenBronze,
                         size: 20),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1125,7 +1150,8 @@ class _OffersScreenState extends State<OffersScreen> {
                           _currentFilters.remove('search');
                           _fetchOffers();
                         },
-                        child: const Icon(Icons.close_rounded, color: AppColors.grey, size: 18),
+                        child: const Icon(Icons.close_rounded,
+                            color: AppColors.grey, size: 18),
                       ),
                   ]),
                 ),
@@ -1147,7 +1173,8 @@ class _OffersScreenState extends State<OffersScreen> {
                           offset: const Offset(0, 3))
                     ],
                   ),
-                  child: const Icon(Icons.tune_rounded, color: Colors.white, size: 22),
+                  child: const Icon(Icons.tune_rounded,
+                      color: Colors.white, size: 22),
                 ),
               ),
             ],
@@ -1158,8 +1185,11 @@ class _OffersScreenState extends State<OffersScreen> {
   }
 
   Widget _buildOfferCard(Map<String, dynamic> offer, bool isDarkMode) {
-    final Color cardColor = isDarkMode ? const Color(0xFF072A38) : AppColors.pureWhite;
-    final Color borderColor = isDarkMode ? AppColors.goldenBronze.withOpacity(0.2) : Colors.grey.shade200;
+    final Color cardColor =
+        isDarkMode ? const Color(0xFF072A38) : AppColors.pureWhite;
+    final Color borderColor = isDarkMode
+        ? AppColors.goldenBronze.withOpacity(0.2)
+        : Colors.grey.shade200;
     final bool isFeatured = offer["isFeatured"] ?? false;
 
     return GestureDetector(
@@ -1167,7 +1197,8 @@ class _OffersScreenState extends State<OffersScreen> {
             context,
             MaterialPageRoute(
                 builder: (_) => OfferDetailsScreen(
-                    offerData: offer["original_data"] ?? offer, offerType: OfferDetailType.standard))),
+                    offerData: offer["original_data"] ?? offer,
+                    offerType: OfferDetailType.standard))),
         child: Container(
           margin: const EdgeInsets.only(bottom: 14),
           decoration: BoxDecoration(
@@ -1182,7 +1213,8 @@ class _OffersScreenState extends State<OffersScreen> {
             boxShadow: [
               BoxShadow(
                 color: isFeatured
-                    ? AppColors.goldenBronze.withOpacity(isDarkMode ? 0.1 : 0.15)
+                    ? AppColors.goldenBronze
+                        .withOpacity(isDarkMode ? 0.1 : 0.15)
                     : Colors.black.withOpacity(isDarkMode ? 0.2 : 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 5),
@@ -1205,7 +1237,8 @@ class _OffersScreenState extends State<OffersScreen> {
                           top: 8,
                           right: 8,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
                                 color: AppColors.error,
                                 borderRadius: BorderRadius.circular(6)),
@@ -1221,7 +1254,8 @@ class _OffersScreenState extends State<OffersScreen> {
                           bottom: 8,
                           right: 8,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(
                                 color: AppColors.goldenBronze,
                                 borderRadius: BorderRadius.circular(6)),
@@ -1248,11 +1282,13 @@ class _OffersScreenState extends State<OffersScreen> {
                             decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                    color: AppColors.goldenBronze.withOpacity(0.5))),
+                                    color: AppColors.goldenBronze
+                                        .withOpacity(0.5))),
                             child: CircleAvatar(
                                 radius: 10,
                                 backgroundColor: AppColors.lightBackground,
-                                backgroundImage: NetworkImage(offer["storeLogo"])),
+                                backgroundImage:
+                                    NetworkImage(offer["storeLogo"])),
                           ),
                           const SizedBox(width: 6),
                           Expanded(
@@ -1267,7 +1303,9 @@ class _OffersScreenState extends State<OffersScreen> {
                         const SizedBox(height: 8),
                         Text(offer["title"],
                             style: TextStyle(
-                                color: isDarkMode ? AppColors.pureWhite : AppColors.lightText,
+                                color: isDarkMode
+                                    ? AppColors.pureWhite
+                                    : AppColors.lightText,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w900,
                                 height: 1.3),
@@ -1290,14 +1328,13 @@ class _OffersScreenState extends State<OffersScreen> {
                                         style: const TextStyle(
                                             color: AppColors.grey,
                                             fontSize: 11,
-                                            decoration: TextDecoration.lineThrough)),
+                                            decoration:
+                                                TextDecoration.lineThrough)),
                                 ]),
                             // تمرير الـ ID الحقيقي لزر المفضلة
                             OfferActionButtons(
                               isDarkMode: isDarkMode,
                               offerId: offer["id"].toString(),
-                              initialIsLiked: offer["is_liked"],
-                              initialIsFavorited: offer["is_favorited"],
                             ),
                           ],
                         ),

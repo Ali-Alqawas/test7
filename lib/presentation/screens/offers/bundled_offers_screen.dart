@@ -626,7 +626,7 @@ class _BundledOffersScreenState extends State<BundledOffersScreen> {
             }
 
             return {
-              "id": b['group_id']?.toString() ?? b['id']?.toString() ?? '',
+              "id": (b['group_id'] ?? b['id'] ?? '').toString(),
               "title":
                   b['name']?.toString() ?? b['title']?.toString() ?? 'باقة',
               "storeName": storeName,
@@ -996,7 +996,8 @@ class _BundledOffersScreenState extends State<BundledOffersScreen> {
                                     ]),
                                 OfferActionButtons(
                                     isDarkMode: isDark,
-                                    offerId: bundle["id"].toString()),
+                                    offerId: bundle["id"].toString(),
+                                    isGroup: true),
                               ]),
                         ]))),
           ]),

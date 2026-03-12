@@ -476,7 +476,6 @@
 //   }
 // }
 
-
 import 'package:flutter/material.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/api_constants.dart';
@@ -557,15 +556,18 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
                 : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
             // حساب السعر والخصم
-            double price = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
-            double oldPrice = double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
+            double price =
+                double.tryParse(product['price']?.toString() ?? '0') ?? 0;
+            double oldPrice =
+                double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
             String discount = '';
             if (oldPrice > price && oldPrice > 0) {
-              discount = '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
+              discount =
+                  '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
             }
 
             return {
-              "id": product['id']?.toString() ?? '',
+              "id": (product['product_id'] ?? product['id'] ?? '').toString(),
               "title": product['title'] ?? 'بدون عنوان',
               "storeName": storeName,
               "storeLogo": storeLogo,
@@ -575,7 +577,8 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
               "discount": discount.isNotEmpty ? discount : null,
               "is_liked": product['is_liked'] ?? false,
               "is_favorited": product['is_favorited'] ?? false,
-              "original_data": product, // نحتفظ بالبيانات الأصلية لشاشة التفاصيل
+              "original_data":
+                  product, // نحتفظ بالبيانات الأصلية لشاشة التفاصيل
             };
           }).toList();
           _isLoading = false;
@@ -916,8 +919,6 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
                         OfferActionButtons(
                           isDarkMode: isDark,
                           offerId: offer["id"].toString(),
-                          initialIsLiked: offer["is_liked"],
-                          initialIsFavorited: offer["is_favorited"],
                         ),
                       ],
                     ),

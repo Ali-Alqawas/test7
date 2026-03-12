@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../data/providers/social_provider.dart';
 import '../theme/app_colors.dart';
-import '../network/api_service.dart';
-import '../network/api_constants.dart';
 
+// ============================================================================
+// أزرار اللايك والمفضلة — مربوطة بـ SocialProvider المركزي
+// تدعم المنتجات الفردية والمجموعات (الباقات/البروشورات)
+// ============================================================================
 class OfferActionButtons extends StatefulWidget {
   final bool isDarkMode;
   final String offerId;
-  final bool initialIsLiked;
-  final bool initialIsFavorited;
+
+  /// إذا كان true → يستخدم endpoints المجموعات (group-likes/group-favorites)
+  final bool isGroup;
 
   const OfferActionButtons({
     super.key,
     required this.isDarkMode,
     required this.offerId,
-    this.initialIsLiked = false,
-    this.initialIsFavorited = false,
+    this.isGroup = false,
   });
 
   @override
@@ -23,9 +27,6 @@ class OfferActionButtons extends StatefulWidget {
 
 class _OfferActionButtonsState extends State<OfferActionButtons>
     with TickerProviderStateMixin {
-  late bool isLiked;
-  late bool isFavorited;
-
   late AnimationController _likeController;
   late AnimationController _favController;
   late Animation<double> _likeScale;
@@ -34,8 +35,6 @@ class _OfferActionButtonsState extends State<OfferActionButtons>
   @override
   void initState() {
     super.initState();
-    isLiked = widget.initialIsLiked;
-    isFavorited = widget.initialIsFavorited;
 
     _likeController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 300));
@@ -71,61 +70,70 @@ class _OfferActionButtonsState extends State<OfferActionButtons>
     super.dispose();
   }
 
-void _toggleLike() async {
-    // 1. التحديث المرئي الفوري (Optimistic UI)
-    setState(() {
-      isLiked = !isLiked;
-    });
-    if (isLiked) {
-      _likeController.forward(from: 0.0);
-    }
-try {
-      await ApiService().post(
-        ApiConstants.toggleLike(widget.offerId),
-      );
-      // نجح الطلب، لا داعي لعمل شيء آخر
-    } catch (e) {
-      // 3. التراجع في حال الفشل
-      setState(() {
-        isLiked = !isLiked;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('حدث خطأ، يرجى المحاولة لاحقاً')),
-        );
-      }
-    }
+  /// هل الـ ID صالح للإرسال للـ API؟
+  bool get _isValidId {
+    final id = widget.offerId;
+    return id.isNotEmpty && int.tryParse(id) != null;
   }
-  void _toggleFavorite() async {
-    // 1. التحديث المرئي الفوري (Optimistic UI)
-    setState(() {
-      isFavorited = !isFavorited;
-    });
-    if (isFavorited) {
-      _favController.forward(from: 0.0);
+
+  void _toggleLike() async {
+    if (!_isValidId) {
+      debugPrint('⚠️ offerId غير رقمي: "${widget.offerId}"');
+      return;
     }
 
-    // 2. إرسال الطلب للباك إند
-    try {
-      await ApiService().post(
-        ApiConstants.toggleFavorite(widget.offerId),
+    _likeController.forward(from: 0.0);
+    final social = context.read<SocialProvider>();
+
+    final success = widget.isGroup
+        ? await social.toggleGroupLike(widget.offerId)
+        : await social.toggleLike(widget.offerId);
+
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('حدث خطأ في الإعجاب، يرجى المحاولة لاحقاً')),
       );
-      // نجح الطلب
-    } catch (e) {
-      // 3. التراجع في حال الفشل
-      setState(() {
-        isFavorited = !isFavorited;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('حدث خطأ، يرجى المحاولة لاحقاً')),
-        );
-      }
+    }
+  }
+
+  void _toggleFavorite() async {
+    if (!_isValidId) {
+      debugPrint('⚠️ offerId غير رقمي: "${widget.offerId}"');
+      return;
+    }
+
+    _favController.forward(from: 0.0);
+    final social = context.read<SocialProvider>();
+
+    final success = widget.isGroup
+        ? await social.toggleGroupFavorite(widget.offerId)
+        : await social.toggleFavorite(widget.offerId);
+
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('حدث خطأ في المفضلة، يرجى المحاولة لاحقاً')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final social = context.watch<SocialProvider>();
+
+    // اختيار الحالة حسب النوع (منتج فردي أو مجموعة)
+    final bool isLiked = _isValidId
+        ? (widget.isGroup
+            ? social.isGroupLiked(widget.offerId)
+            : social.isLiked(widget.offerId))
+        : false;
+    final bool isFavorited = _isValidId
+        ? (widget.isGroup
+            ? social.isGroupFavorited(widget.offerId)
+            : social.isFavorited(widget.offerId))
+        : false;
+
     final Color boxBgColor = widget.isDarkMode
         ? Colors.white.withOpacity(0.05)
         : Colors.grey.shade100;

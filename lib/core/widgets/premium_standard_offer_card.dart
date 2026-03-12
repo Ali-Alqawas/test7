@@ -315,7 +315,7 @@ class _PremiumStandardOffersSectionState
                 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=random&color=fff';
 
             return {
-              "id": apiOffer['product_id']?.toString() ?? "",
+              "id": (apiOffer['product_id'] ?? apiOffer['id'] ?? '').toString(),
               "title": apiOffer['title'] ?? 'بدون عنوان',
               "storeName": storeName,
               "storeLogo": storeLogo,
@@ -539,9 +539,7 @@ class _PremiumStandardOffersSectionState
                           // تمرير الـ ID الحقيقي لأزرار التفاعل والإعجاب
                           OfferActionButtons(
                               isDarkMode: widget.isDarkMode,
-                              offerId: offer["id"], // 👈 تم التعديل هنا
-                              initialIsLiked: offer["is_liked"],
-                              initialIsFavorited: offer["is_favorited"]),
+                              offerId: offer["id"]),
                         ],
                       ),
                     ],

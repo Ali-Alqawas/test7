@@ -27,6 +27,36 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  List<Map<String, dynamic>> _draws = [];
+  bool _loadingDraws = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final auth = context.read<AuthProvider>();
+    // Refresh profile data
+    try {
+      await auth.fetchProfile();
+    } catch (_) {}
+
+    // Fetch draws for the rewards section
+    setState(() => _loadingDraws = true);
+    try {
+      final draws = await auth.fetchDraws();
+      if (mounted) setState(() => _draws = draws);
+    } catch (_) {}
+    if (mounted) setState(() => _loadingDraws = false);
+
+    // Fetch referral code
+    try {
+      await auth.fetchReferralCode();
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -42,122 +72,127 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Scaffold(
         backgroundColor: bg,
         body: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 100),
-            child: Column(
-              children: [
-                _buildTopBar(context, isDark, textC),
-                _buildProfileCard(isDark, textC, cardC, borderC),
-                _buildStatsCard(isDark, cardC, borderC, textC),
-                const SizedBox(height: 16),
+          child: RefreshIndicator(
+            color: AppColors.goldenBronze,
+            onRefresh: _loadData,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics()),
+              padding: const EdgeInsets.only(bottom: 100),
+              child: Column(
+                children: [
+                  _buildTopBar(context, isDark, textC),
+                  _buildProfileCard(isDark, textC, cardC, borderC),
+                  _buildStatsCard(isDark, cardC, borderC, textC),
+                  const SizedBox(height: 16),
 
-                // ===== المكافآت والسحوبات =====
-                _buildRewardsSection(context, isDark, textC, cardC, borderC),
-                const SizedBox(height: 20),
+                  // ===== المكافآت والسحوبات =====
+                  _buildRewardsSection(context, isDark, textC, cardC, borderC),
+                  const SizedBox(height: 20),
 
-                // ===== إعدادات الحساب =====
-                _buildSectionTitle("إعدادات الحساب", textC),
-                _buildSettingsGroup([
-                  _SettingItem(
-                      Icons.person_outline_rounded,
-                      "تعديل الملف الشخصي",
-                      "الاسم، الصورة، البريد",
-                      () => _push(context, const EditProfileScreen())),
-                  _SettingItem(
-                      Icons.location_on_outlined,
-                      "العناوين المحفوظة",
-                      "إضافة أو تعديل العناوين",
-                      () => _push(context, const SavedAddressesScreen())),
-                  _SettingItem(
-                      Icons.lock_outline_rounded,
-                      "الأمان والخصوصية",
-                      "كلمة المرور والتحقق",
-                      () => _push(context, const SecurityScreen())),
-                ], isDark, cardC, borderC, textC),
+                  // ===== إعدادات الحساب =====
+                  _buildSectionTitle("إعدادات الحساب", textC),
+                  _buildSettingsGroup([
+                    _SettingItem(
+                        Icons.person_outline_rounded,
+                        "تعديل الملف الشخصي",
+                        "الاسم، الصورة، البريد",
+                        () => _push(context, const EditProfileScreen())),
+                    _SettingItem(
+                        Icons.location_on_outlined,
+                        "العناوين المحفوظة",
+                        "إضافة أو تعديل العناوين",
+                        () => _push(context, const SavedAddressesScreen())),
+                    _SettingItem(
+                        Icons.lock_outline_rounded,
+                        "الأمان والخصوصية",
+                        "كلمة المرور والتحقق",
+                        () => _push(context, const SecurityScreen())),
+                  ], isDark, cardC, borderC, textC),
 
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // ===== التفاعل والتواصل =====
-                _buildSectionTitle("التفاعل والتواصل", textC),
-                _buildSettingsGroup([
-                  _SettingItem(
-                      Icons.inbox_rounded,
-                      "صندوق الوارد",
-                      "المحادثات مع المتاجر",
-                      () => _push(context, const InboxScreen())),
-                  _SettingItem(
-                      Icons.store_rounded,
-                      "طلب ترقية لتاجر",
-                      "افتح متجرك الخاص",
-                      () => _push(context, const MerchantUpgradeScreen())),
-                ], isDark, cardC, borderC, textC),
+                  // ===== التفاعل والتواصل =====
+                  _buildSectionTitle("التفاعل والتواصل", textC),
+                  _buildSettingsGroup([
+                    _SettingItem(
+                        Icons.inbox_rounded,
+                        "صندوق الوارد",
+                        "المحادثات مع المتاجر",
+                        () => _push(context, const InboxScreen())),
+                    _SettingItem(
+                        Icons.store_rounded,
+                        "طلب ترقية لتاجر",
+                        "افتح متجرك الخاص",
+                        () => _push(context, const MerchantUpgradeScreen())),
+                  ], isDark, cardC, borderC, textC),
 
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // ===== التفضيلات =====
-                _buildSectionTitle("التفضيلات", textC),
-                _buildSettingsGroup([
-                  _SettingItem(
-                      Icons.notifications_none_rounded,
-                      "الإشعارات",
-                      "تحكم بالتنبيهات",
-                      () =>
-                          _push(context, const NotificationsSettingsScreen())),
-                  _SettingItem(Icons.language_rounded, "اللغة", "العربية",
-                      () => _showLanguageSheet(context, isDark)),
-                  _SettingItem(
-                      Icons.palette_outlined,
-                      "المظهر",
-                      isDark ? "الوضع الليلي" : "الوضع النهاري",
-                      () => _showThemeSheet(context, isDark)),
-                ], isDark, cardC, borderC, textC),
+                  // ===== التفضيلات =====
+                  _buildSectionTitle("التفضيلات", textC),
+                  _buildSettingsGroup([
+                    _SettingItem(
+                        Icons.notifications_none_rounded,
+                        "الإشعارات",
+                        "تحكم بالتنبيهات",
+                        () => _push(
+                            context, const NotificationsSettingsScreen())),
+                    _SettingItem(Icons.language_rounded, "اللغة", "العربية",
+                        () => _showLanguageSheet(context, isDark)),
+                    _SettingItem(
+                        Icons.palette_outlined,
+                        "المظهر",
+                        isDark ? "الوضع الليلي" : "الوضع النهاري",
+                        () => _showThemeSheet(context, isDark)),
+                  ], isDark, cardC, borderC, textC),
 
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // ===== الدعم والمساعدة =====
-                _buildSectionTitle("الدعم والمساعدة", textC),
-                _buildSettingsGroup([
-                  _SettingItem(
-                      Icons.headset_mic_outlined,
-                      "مركز الدعم",
-                      "التذاكر والأسئلة الشائعة",
-                      () => _push(context, const SupportCenterScreen())),
-                ], isDark, cardC, borderC, textC),
+                  // ===== الدعم والمساعدة =====
+                  _buildSectionTitle("الدعم والمساعدة", textC),
+                  _buildSettingsGroup([
+                    _SettingItem(
+                        Icons.headset_mic_outlined,
+                        "مركز الدعم",
+                        "التذاكر والأسئلة الشائعة",
+                        () => _push(context, const SupportCenterScreen())),
+                  ], isDark, cardC, borderC, textC),
 
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // ===== المعلومات القانونية =====
-                _buildSectionTitle("معلومات", textC),
-                _buildSettingsGroup([
-                  _SettingItem(
-                      Icons.info_outline_rounded,
-                      "من نحن",
-                      "عن التطبيق",
-                      () => _push(context,
-                          const LegalScreen(title: "من نحن", type: "about"))),
-                  _SettingItem(
-                      Icons.privacy_tip_outlined,
-                      "سياسة الخصوصية",
-                      "حماية بياناتك",
-                      () => _push(
-                          context,
-                          const LegalScreen(
-                              title: "سياسة الخصوصية", type: "privacy"))),
-                  _SettingItem(
-                      Icons.description_outlined,
-                      "الشروط والأحكام",
-                      "قواعد الاستخدام",
-                      () => _push(
-                          context,
-                          const LegalScreen(
-                              title: "الشروط والأحكام", type: "terms"))),
-                ], isDark, cardC, borderC, textC),
+                  // ===== المعلومات القانونية =====
+                  _buildSectionTitle("معلومات", textC),
+                  _buildSettingsGroup([
+                    _SettingItem(
+                        Icons.info_outline_rounded,
+                        "من نحن",
+                        "عن التطبيق",
+                        () => _push(context,
+                            const LegalScreen(title: "من نحن", type: "about"))),
+                    _SettingItem(
+                        Icons.privacy_tip_outlined,
+                        "سياسة الخصوصية",
+                        "حماية بياناتك",
+                        () => _push(
+                            context,
+                            const LegalScreen(
+                                title: "سياسة الخصوصية", type: "privacy"))),
+                    _SettingItem(
+                        Icons.description_outlined,
+                        "الشروط والأحكام",
+                        "قواعد الاستخدام",
+                        () => _push(
+                            context,
+                            const LegalScreen(
+                                title: "الشروط والأحكام", type: "terms"))),
+                  ], isDark, cardC, borderC, textC),
 
-                const SizedBox(height: 25),
-                _buildLogoutButton(isDark),
-                const SizedBox(height: 15),
-              ],
+                  const SizedBox(height: 25),
+                  _buildLogoutButton(isDark),
+                  const SizedBox(height: 15),
+                ],
+              ),
             ),
           ),
         ),
@@ -231,6 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ==========================================
   Widget _buildProfileCard(
       bool isDark, Color textC, Color cardC, Color borderC) {
+    final auth = context.watch<AuthProvider>();
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       padding: const EdgeInsets.all(20),
@@ -262,30 +298,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: CircleAvatar(
               radius: 35,
               backgroundColor: AppColors.softCream,
-              backgroundImage:
-                  NetworkImage(context.watch<AuthProvider>().userImage)),
+              backgroundImage: NetworkImage(auth.userImage)),
         ),
         const SizedBox(width: 16),
         Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(context.watch<AuthProvider>().userName,
+          Text(auth.userName,
               style: TextStyle(
                   color: textC, fontSize: 22, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          Row(children: [
-            const Icon(Icons.location_on_outlined,
-                color: AppColors.goldenBronze, size: 14),
-            const SizedBox(width: 4),
-            Text(
-                context.watch<AuthProvider>().userProfile?['location'] ??
-                    'موقع غير محدد',
-                style: TextStyle(
-                    color:
-                        isDark ? AppColors.warmBeige : AppColors.goldenBronze,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-          ]),
+          if (auth.userEmail.isNotEmpty) ...[
+            Row(children: [
+              const Icon(Icons.email_outlined,
+                  color: AppColors.goldenBronze, size: 14),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(auth.userEmail,
+                    style: TextStyle(
+                        color: isDark
+                            ? AppColors.warmBeige
+                            : AppColors.goldenBronze,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ]),
+          ] else
+            Row(children: [
+              const Icon(Icons.location_on_outlined,
+                  color: AppColors.goldenBronze, size: 14),
+              const SizedBox(width: 4),
+              Text(auth.userProfile?['location'] ?? 'موقع غير محدد',
+                  style: TextStyle(
+                      color:
+                          isDark ? AppColors.warmBeige : AppColors.goldenBronze,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ]),
         ])),
       ]),
     );
@@ -295,6 +345,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // بطاقة الإحصائيات — المحدّثة
   // ==========================================
   Widget _buildStatsCard(bool isDark, Color cardC, Color borderC, Color textC) {
+    final auth = context.watch<AuthProvider>();
+    final points = auth.pointsBalance.toString();
+
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -319,13 +372,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildStatItem(
             "المفضلة", "23", Icons.favorite_border_rounded, isDark, textC),
         _buildDivider(isDark),
-        _buildStatItem(
-            "نقاطي",
-            context.watch<AuthProvider>().userProfile?['points']?.toString() ??
-                '0',
-            Icons.stars_rounded,
-            isDark,
-            textC),
+        _buildStatItem("نقاطي", points, Icons.stars_rounded, isDark, textC),
       ]),
     );
   }
@@ -369,26 +416,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ==========================================
   Widget _buildRewardsSection(BuildContext context, bool isDark, Color textC,
       Color cardC, Color borderC) {
-    final draws = [
-      {
-        "title": "iPhone 16 Pro",
-        "image":
-            "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=300&q=80",
-        "points": "200 نقطة"
-      },
-      {
-        "title": "PlayStation 5",
-        "image":
-            "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=300&q=80",
-        "points": "150 نقطة"
-      },
-      {
-        "title": "AirPods Pro",
-        "image":
-            "https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?auto=format&fit=crop&w=300&q=80",
-        "points": "80 نقطة"
-      },
-    ];
+    final auth = context.watch<AuthProvider>();
+    final points = auth.pointsBalance;
+    final code = auth.referralCode ?? '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -428,8 +458,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                     const Text("محفظة النقاط",
                         style: TextStyle(color: Colors.white70, fontSize: 12)),
-                    Text(
-                        "${context.watch<AuthProvider>().userProfile?['points'] ?? '0'} نقطة",
+                    Text("$points نقطة",
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 22,
@@ -438,9 +467,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Column(children: [
                 GestureDetector(
                   onTap: () {
-                    Clipboard.setData(const ClipboardData(text: "HAZEM2024"));
+                    if (code.isNotEmpty) {
+                      Clipboard.setData(ClipboardData(text: code));
+                    }
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: const Text("تم نسخ رابط الإحالة ✓"),
+                        content: Text(code.isNotEmpty
+                            ? "تم نسخ رابط الإحالة: $code ✓"
+                            : "تم نسخ رابط الإحالة ✓"),
                         backgroundColor: AppColors.goldenBronze,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
@@ -489,52 +522,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 12),
         SizedBox(
           height: 140,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: draws.length,
-            itemBuilder: (_, i) {
-              final d = draws[i];
-              return GestureDetector(
-                onTap: () => _push(context, const DrawsScreen()),
-                child: Container(
-                  width: 130,
-                  margin: const EdgeInsets.only(left: 12),
-                  decoration: BoxDecoration(
-                    color: cardC,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderC),
-                  ),
-                  child: Column(children: [
-                    Expanded(
-                        child: ClipRRect(
-                      borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(15)),
-                      child: Image.network(d["image"]!,
-                          fit: BoxFit.cover, width: double.infinity),
-                    )),
-                    Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Column(children: [
-                          Text(d["title"]!,
-                              style: TextStyle(
-                                  color: textC,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 2),
-                          Text(d["points"]!,
-                              style: const TextStyle(
-                                  color: AppColors.goldenBronze,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold)),
-                        ])),
-                  ]),
-                ),
-              );
-            },
-          ),
+          child: _loadingDraws
+              ? const Center(
+                  child: CircularProgressIndicator(
+                      color: AppColors.goldenBronze, strokeWidth: 2))
+              : _draws.isEmpty
+                  ? Center(
+                      child: Text("لا توجد سحوبات حالياً",
+                          style: TextStyle(
+                              color: textC.withOpacity(0.4), fontSize: 13)))
+                  : ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: _draws.length,
+                      itemBuilder: (_, i) {
+                        final d = _draws[i];
+                        final title = d['name'] ?? 'سحب';
+                        final image = '';
+                        final pts = '${d['points_required'] ?? 0} نقطة';
+                        return GestureDetector(
+                          onTap: () => _push(context, const DrawsScreen()),
+                          child: Container(
+                            width: 130,
+                            margin: const EdgeInsets.only(left: 12),
+                            decoration: BoxDecoration(
+                              color: cardC,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: borderC),
+                            ),
+                            child: Column(children: [
+                              Expanded(
+                                  child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(15)),
+                                child: image.toString().isNotEmpty
+                                    ? Image.network(
+                                        image.toString().startsWith('http')
+                                            ? image
+                                            : 'http://192.168.1.103:8000$image',
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          color: AppColors.goldenBronze
+                                              .withOpacity(0.1),
+                                          child: const Icon(
+                                              Icons.card_giftcard_rounded,
+                                              color: AppColors.goldenBronze,
+                                              size: 30),
+                                        ),
+                                      )
+                                    : Container(
+                                        color: AppColors.goldenBronze
+                                            .withOpacity(0.1),
+                                        child: const Center(
+                                          child: Icon(
+                                              Icons.card_giftcard_rounded,
+                                              color: AppColors.goldenBronze,
+                                              size: 30),
+                                        ),
+                                      ),
+                              )),
+                              Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Column(children: [
+                                    Text(title.toString(),
+                                        style: TextStyle(
+                                            color: textC,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 2),
+                                    Text(pts,
+                                        style: const TextStyle(
+                                            color: AppColors.goldenBronze,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold)),
+                                  ])),
+                            ]),
+                          ),
+                        );
+                      },
+                    ),
         ),
       ]),
     );
@@ -798,7 +867,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             decoration: BoxDecoration(
                 color: AppColors.goldenBronze.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: AppColors.goldenBronze, size: 22),
+            child: Icon(icon, color: AppColors.goldenBronze, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -821,14 +890,14 @@ class _SettingItem {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-
-  _SettingItem(this.icon, this.title, this.subtitle, this.onTap);
+  const _SettingItem(this.icon, this.title, this.subtitle, this.onTap);
 }
 
 /// Helper widget to redirect to login after logout
 class _LogoutLoginRedirect extends StatelessWidget {
   const _LogoutLoginRedirect();
-
   @override
-  Widget build(BuildContext context) => const LoginScreen();
+  Widget build(BuildContext context) {
+    return const LoginScreen();
+  }
 }

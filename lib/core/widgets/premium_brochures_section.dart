@@ -64,8 +64,8 @@ class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
   Future<void> _fetchBrochures() async {
     try {
       final data = await _api.get(
-        ApiConstants.productGroups,
-        queryParams: {'type': 'brochure', 'page_size': '6'},
+        ApiConstants.products,
+        queryParams: {'product_type': 'brochure', 'page_size': '6'},
         requiresAuth: false,
       );
 
@@ -76,16 +76,24 @@ class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
         setState(() {
           _brochures = rawBrochures.map<Map<String, dynamic>>((b) {
             String storeName = b['store_name']?.toString() ?? 'متجر';
+
+            // استخراج الصورة الأنسب
+            var images = b['images'] as List?;
+            String imageUrl = (images != null && images.isNotEmpty)
+                ? ApiConstants.resolveImageUrl(
+                    images[0]['image_url']?.toString())
+                : ApiConstants.resolveImageUrl(
+                    b['image']?.toString() ?? b['thumbnail']?.toString());
+
             return {
-              "id": b['id']?.toString() ?? '',
+              "id": (b['product_id'] ?? b['id'])?.toString() ?? '',
               "title": b['title']?.toString() ?? 'كتيب عروض',
               "store": storeName,
               "logo": b['store_logo'] != null
                   ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
                   : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff',
-              "image": ApiConstants.resolveImageUrl(
-                  b['image']?.toString() ?? b['cover_image']?.toString()),
-              "pages": b['pages_count'] ?? b['products_count'] ?? 0,
+              "image": imageUrl,
+              "pages": b['pages_count'] ?? (images?.length ?? 1),
             };
           }).toList();
           _isLoading = false;

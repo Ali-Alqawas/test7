@@ -1,142 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
+import '../../../core/network/api_constants.dart';
+import '../../../data/providers/auth_provider.dart';
 
 class AllCommentsScreen extends StatefulWidget {
+  final String productId;
   final String offerTitle;
-  const AllCommentsScreen({super.key, required this.offerTitle});
+  final bool isGroup;
+
+  const AllCommentsScreen({
+    super.key,
+    required this.productId,
+    required this.offerTitle,
+    this.isGroup = false,
+  });
+
   @override
   State<AllCommentsScreen> createState() => _AllCommentsScreenState();
 }
 
 class _AllCommentsScreenState extends State<AllCommentsScreen> {
   final TextEditingController _commentController = TextEditingController();
-  String _selectedFilter = "الأحدث";
-  // مفتاح الرد: إن كان != null نحن في وضع الرد على تعليق
-  int? _replyingTo;
 
-  final List<Map<String, dynamic>> _comments = [
-    {
-      "user": "أحمد محمد",
-      "avatar": "https://i.pravatar.cc/150?img=1",
-      "text": "عرض ممتاز جداً! استفدت منه كثير 👏",
-      "time": "منذ ساعتين",
-      "likes": 24,
-      "liked": false,
-      "mood": "😍",
-      "replies": [
-        {
-          "user": "سارة علي",
-          "avatar": "https://i.pravatar.cc/150?img=5",
-          "text": "أنا بعد! أنصح الكل يستفيد منه",
-          "time": "منذ ساعة",
-          "likes": 8,
-          "liked": false
-        },
-        {
-          "user": "خالد حسن",
-          "avatar": "https://i.pravatar.cc/150?img=8",
-          "text": "موافق 100%",
-          "time": "منذ 45 دقيقة",
-          "likes": 3,
-          "liked": false
-        },
-      ],
-    },
-    {
-      "user": "فاطمة يوسف",
-      "avatar": "https://i.pravatar.cc/150?img=9",
-      "text": "السعر مناسب مقارنة بالمحلات الثانية",
-      "time": "منذ 5 ساعات",
-      "likes": 15,
-      "liked": false,
-      "mood": "😊",
-      "replies": [
-        {
-          "user": "نورة",
-          "avatar": "https://i.pravatar.cc/150?img=10",
-          "text": "وين المحل بالضبط؟",
-          "time": "منذ 4 ساعات",
-          "likes": 2,
-          "liked": false
-        },
-      ],
-    },
-    {
-      "user": "عمر العبدلي",
-      "avatar": "https://i.pravatar.cc/150?img=3",
-      "text": "جربته وكان عادي صراحة، متوقع أكثر",
-      "time": "منذ يوم",
-      "likes": 7,
-      "liked": false,
-      "mood": "😐",
-      "replies": [],
-    },
-    {
-      "user": "ريم الشهري",
-      "avatar": "https://i.pravatar.cc/150?img=20",
-      "text": "أفضل عرض شفته هالشهر 🔥🔥",
-      "time": "منذ يومين",
-      "likes": 31,
-      "liked": false,
-      "mood": "😍",
-      "replies": [
-        {
-          "user": "ليلى",
-          "avatar": "https://i.pravatar.cc/150?img=21",
-          "text": "وش اللون اللي اخذتيه؟",
-          "time": "منذ يومين",
-          "likes": 1,
-          "liked": false
-        },
-        {
-          "user": "ريم الشهري",
-          "avatar": "https://i.pravatar.cc/150?img=20",
-          "text": "الأسود، ينفع لكل شيء",
-          "time": "منذ يومين",
-          "likes": 5,
-          "liked": false
-        },
-        {
-          "user": "هند",
-          "avatar": "https://i.pravatar.cc/150?img=22",
-          "text": "ابي اطلبه بعد!",
-          "time": "منذ يوم",
-          "likes": 0,
-          "liked": false
-        },
-      ],
-    },
-    {
-      "user": "ماجد السعدي",
-      "avatar": "https://i.pravatar.cc/150?img=6",
-      "text": "التوصيل كان بطيء بس المنتج حلو",
-      "time": "منذ 3 أيام",
-      "likes": 9,
-      "liked": false,
-      "mood": "😊",
-      "replies": [],
-    },
-    {
-      "user": "نوف الحربي",
-      "avatar": "https://i.pravatar.cc/150?img=25",
-      "text": "ما يستاهل الضجة اللي حوله 😕",
-      "time": "منذ 4 أيام",
-      "likes": 4,
-      "liked": false,
-      "mood": "😤",
-      "replies": [
-        {
-          "user": "محمد",
-          "avatar": "https://i.pravatar.cc/150?img=7",
-          "text": "ليش؟ وش المشكلة اللي واجهتك؟",
-          "time": "منذ 4 أيام",
-          "likes": 2,
-          "liked": false
-        },
-      ],
-    },
-  ];
+  List<Map<String, dynamic>> _comments = [];
+  bool _isLoading = true;
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchComments();
+  }
 
   @override
   void dispose() {
@@ -144,11 +40,142 @@ class _AllCommentsScreenState extends State<AllCommentsScreen> {
     super.dispose();
   }
 
+  // ──────────────────────────────────────────────
+  // جلب التعليقات
+  // ──────────────────────────────────────────────
+  Future<void> _fetchComments() async {
+    final auth = context.read<AuthProvider>();
+    final comments = await auth.fetchProductComments(widget.productId);
+    if (mounted) {
+      setState(() {
+        _comments = comments;
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // إرسال تعليق جديد
+  // ──────────────────────────────────────────────
+  Future<void> _submitComment() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+
+    final productIdInt = int.tryParse(widget.productId);
+    if (productIdInt == null) return;
+
+    setState(() => _isSending = true);
+    final auth = context.read<AuthProvider>();
+    final result = await auth.addComment(productId: productIdInt, text: text);
+
+    if (mounted) {
+      setState(() => _isSending = false);
+      if (result != null) {
+        _commentController.clear();
+        _fetchComments(); // إعادة جلب التعليقات
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("تم إضافة تعليقك ✅",
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            backgroundColor: Color(0xFF4CAF50),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("فشل إرسال التعليق",
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // حذف تعليق
+  // ──────────────────────────────────────────────
+  Future<void> _deleteComment(int commentId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text("حذف التعليق"),
+          content: const Text("هل أنت متأكد من حذف هذا التعليق؟"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("إلغاء"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child:
+                  const Text("حذف", style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final auth = context.read<AuthProvider>();
+    final success = await auth.deleteComment(commentId);
+    if (mounted) {
+      if (success) {
+        _fetchComments();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("تم حذف التعليق",
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            backgroundColor: AppColors.goldenBronze,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("فشل حذف التعليق",
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // تنسيق الوقت
+  // ──────────────────────────────────────────────
+  String _formatTimeAgo(String dateStr) {
+    if (dateStr.isEmpty) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      final diff = DateTime.now().difference(date);
+      if (diff.inMinutes < 1) return 'الآن';
+      if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
+      if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
+      if (diff.inDays < 30) return 'منذ ${diff.inDays} يوم';
+      return 'منذ ${(diff.inDays / 30).floor()} شهر';
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // البناء
+  // ──────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.deepNavy : AppColors.lightBackground;
     final textC = isDark ? AppColors.pureWhite : AppColors.lightText;
+
+    // الحصول على user_id الحالي
+    final auth = context.watch<AuthProvider>();
+    final currentUserId =
+        (auth.userProfile?['id'] ?? auth.userProfile?['user_id'] ?? '')
+            .toString();
 
     return Directionality(
         textDirection: TextDirection.rtl,
@@ -157,14 +184,40 @@ class _AllCommentsScreenState extends State<AllCommentsScreen> {
             body: SafeArea(
                 child: Column(children: [
               _buildHeader(isDark, textC),
-              _buildFilterBar(isDark, textC),
               Expanded(
-                  child: ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 5, 16, 10),
-                itemCount: _comments.length,
-                itemBuilder: (_, i) => _buildComment(i, isDark, textC),
-              )),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.goldenBronze, strokeWidth: 2))
+                    : _comments.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.chat_bubble_outline_rounded,
+                                    color: textC.withOpacity(0.15), size: 56),
+                                const SizedBox(height: 16),
+                                Text("لا توجد تعليقات بعد",
+                                    style: TextStyle(
+                                        color: textC.withOpacity(0.5),
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 8),
+                                Text("كن أول من يعلّق!",
+                                    style: TextStyle(
+                                        color: textC.withOpacity(0.3),
+                                        fontSize: 13)),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            physics: const BouncingScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(16, 5, 16, 10),
+                            itemCount: _comments.length,
+                            itemBuilder: (_, i) => _buildComment(
+                                _comments[i], isDark, textC, currentUserId),
+                          ),
+              ),
               _buildInputBar(isDark, textC),
             ]))));
   }
@@ -224,170 +277,94 @@ class _AllCommentsScreenState extends State<AllCommentsScreen> {
         ]));
   }
 
-  Widget _buildFilterBar(bool isDark, Color textC) {
-    final filters = ["الأحدث", "الأكثر تفاعلاً", "الإيجابية", "السلبية"];
-    return SizedBox(
-        height: 42,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: filters.length,
-          itemBuilder: (_, i) {
-            final f = filters[i];
-            final sel = f == _selectedFilter;
-            return GestureDetector(
-                onTap: () => setState(() => _selectedFilter = f),
-                child: Container(
-                    margin: const EdgeInsets.only(left: 8, bottom: 6),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                        color: sel
-                            ? AppColors.goldenBronze
-                            : (isDark
-                                ? const Color(0xFF072A38)
-                                : AppColors.pureWhite),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: sel
-                                ? AppColors.goldenBronze
-                                : AppColors.goldenBronze.withOpacity(0.3))),
-                    child: Text(f,
-                        style: TextStyle(
-                            color: sel ? Colors.white : textC,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))));
-          },
-        ));
-  }
-
-  Widget _buildComment(int index, bool isDark, Color textC) {
-    final c = _comments[index];
-    final cardBg = isDark ? const Color(0xFF072A38) : AppColors.pureWhite;
-    final List replies = c["replies"] ?? [];
-    final bool expanded = c["showReplies"] ?? false;
+  Widget _buildComment(
+      Map<String, dynamic> c, bool isDark, Color textC, String currentUserId) {
+    final commentId = c['id'] ?? c['comment_id'] ?? 0;
+    final userName = (c['user_name'] ?? c['username'] ?? 'مستخدم').toString();
+    final text = (c['text'] ?? '').toString();
+    final createdAt = (c['created_at'] ?? '').toString();
+    final commentUserId = (c['user'] ?? c['user_id'] ?? '').toString();
+    final avatar = (c['user_avatar'] ?? c['avatar'] ?? '').toString();
+    final avatarUrl = avatar.isNotEmpty
+        ? ApiConstants.resolveImageUrl(avatar)
+        : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(userName)}&background=B8860B&color=fff';
+    final timeAgo = _formatTimeAgo(createdAt);
+    final isOwnComment =
+        commentUserId == currentUserId && currentUserId.isNotEmpty;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: isDark
-                  ? AppColors.goldenBronze.withOpacity(0.15)
-                  : Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.15 : 0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 3))
-          ]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // هيدر التعليق
-        Row(children: [
-          CircleAvatar(radius: 18, backgroundImage: NetworkImage(c["avatar"])),
-          const SizedBox(width: 10),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Row(children: [
-                  Text(c["user"],
-                      style: TextStyle(
-                          color: textC,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800)),
-                  const SizedBox(width: 6),
-                  Text(c["mood"] ?? "", style: const TextStyle(fontSize: 14)),
-                ]),
-                Text(c["time"],
-                    style: TextStyle(color: AppColors.grey, fontSize: 11)),
-              ])),
-        ]),
-        const SizedBox(height: 10),
-        // نص التعليق
-        Text(c["text"],
-            style: TextStyle(color: textC, fontSize: 14, height: 1.5)),
-        const SizedBox(height: 10),
-        // أزرار التفاعل
-        Row(children: [
-          GestureDetector(
-            onTap: () => setState(() {
-              c["liked"] = !(c["liked"] ?? false);
-              c["likes"] += c["liked"] ? 1 : -1;
-            }),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(
-                  c["liked"]
-                      ? Icons.thumb_up_alt_rounded
-                      : Icons.thumb_up_alt_outlined,
-                  color: c["liked"] ? AppColors.goldenBronze : AppColors.grey,
-                  size: 16),
-              const SizedBox(width: 4),
-              Text("${c["likes"]}",
-                  style: TextStyle(color: AppColors.grey, fontSize: 12)),
-            ]),
-          ),
-          const SizedBox(width: 20),
-          GestureDetector(
-            onTap: () => setState(() {
-              _replyingTo = index;
-            }),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.reply_rounded, color: AppColors.grey, size: 16),
-              const SizedBox(width: 4),
-              Text("رد", style: TextStyle(color: AppColors.grey, fontSize: 12)),
-            ]),
-          ),
-        ]),
-        // الردود
-        if (replies.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () => setState(() => c["showReplies"] = !expanded),
-            child: Text(
-                expanded ? "إخفاء الردود ▲" : "عرض ${replies.length} رد ▼",
-                style: const TextStyle(
-                    color: AppColors.goldenBronze,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700)),
-          ),
-          if (expanded) ...[
-            const SizedBox(height: 8),
-            ...replies.map<Widget>((r) => _buildReply(r, isDark, textC)),
-          ],
-        ],
-      ]),
-    );
-  }
-
-  Widget _buildReply(Map<String, dynamic> r, bool isDark, Color textC) {
-    return Container(
-      margin: const EdgeInsets.only(top: 8, right: 20),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-          color: isDark ? AppColors.deepNavy : AppColors.lightBackground,
-          borderRadius: BorderRadius.circular(12),
+          color: isDark
+              ? AppColors.deepNavy.withOpacity(0.5)
+              : AppColors.lightBackground.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
               color: isDark
                   ? AppColors.goldenBronze.withOpacity(0.1)
                   : Colors.grey.shade100)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // هيدر التعليق
         Row(children: [
-          CircleAvatar(radius: 12, backgroundImage: NetworkImage(r["avatar"])),
-          const SizedBox(width: 8),
-          Text(r["user"],
-              style: TextStyle(
-                  color: textC, fontSize: 12, fontWeight: FontWeight.w700)),
-          const Spacer(),
-          Text(r["time"],
-              style: TextStyle(color: AppColors.grey, fontSize: 10)),
+          Container(
+            padding: const EdgeInsets.all(1.5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: AppColors.goldenBronze.withOpacity(0.5), width: 1.5),
+            ),
+            child: CircleAvatar(
+                radius: 16,
+                backgroundColor: AppColors.lightBackground,
+                backgroundImage: NetworkImage(avatarUrl)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(userName,
+                    style: const TextStyle(
+                        color: AppColors.goldenBronze,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Icon(Icons.access_time_rounded,
+                      color: AppColors.grey.withOpacity(0.6), size: 12),
+                  const SizedBox(width: 4),
+                  Text(timeAgo,
+                      style: TextStyle(
+                          color: AppColors.grey.withOpacity(0.7),
+                          fontSize: 11)),
+                ]),
+              ])),
+          // زر الحذف — يظهر فقط لصاحب التعليق
+          if (isOwnComment)
+            GestureDetector(
+              onTap: () {
+                final id = commentId is int
+                    ? commentId
+                    : int.tryParse(commentId.toString()) ?? 0;
+                if (id > 0) _deleteComment(id);
+              },
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.delete_outline_rounded,
+                    color: AppColors.error, size: 16),
+              ),
+            ),
         ]),
-        const SizedBox(height: 6),
-        Text(r["text"],
-            style: TextStyle(color: textC, fontSize: 13, height: 1.4)),
+        const SizedBox(height: 10),
+        // نص التعليق
+        Text(text,
+            style: TextStyle(
+                color: textC.withOpacity(0.85), fontSize: 14, height: 1.5)),
       ]),
     );
   }
@@ -403,109 +380,57 @@ class _AllCommentsScreenState extends State<AllCommentsScreen> {
                   color: isDark
                       ? AppColors.goldenBronze.withOpacity(0.15)
                       : Colors.grey.shade200))),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        if (_replyingTo != null)
-          Container(
-            margin: const EdgeInsets.only(bottom: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-                color: AppColors.goldenBronze.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8)),
-            child: Row(children: [
-              const Icon(Icons.reply_rounded,
-                  color: AppColors.goldenBronze, size: 14),
-              const SizedBox(width: 6),
-              Expanded(
-                  child: Text("الرد على ${_comments[_replyingTo!]["user"]}",
-                      style: const TextStyle(
-                          color: AppColors.goldenBronze,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600))),
-              GestureDetector(
-                  onTap: () => setState(() => _replyingTo = null),
-                  child: const Icon(Icons.close_rounded,
-                      color: AppColors.grey, size: 16)),
-            ]),
-          ),
-        Row(children: [
-          Expanded(
-              child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.deepNavy
-                          : AppColors.lightBackground,
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(
-                          color: isDark
-                              ? AppColors.goldenBronze.withOpacity(0.2)
-                              : Colors.grey.shade300)),
-                  child: TextField(
-                      controller: _commentController,
-                      style: TextStyle(color: textC, fontSize: 14),
-                      maxLines: null,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _submitComment(),
-                      decoration: InputDecoration(
-                          hintText: _replyingTo != null
-                              ? "اكتب ردك..."
-                              : "اكتب تعليقك...",
-                          hintStyle:
-                              TextStyle(color: AppColors.grey, fontSize: 13),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 10))))),
-          const SizedBox(width: 8),
-          GestureDetector(
-              onTap: _submitComment,
-              child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                      color: AppColors.goldenBronze,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                            color: AppColors.goldenBronze.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3))
-                      ]),
-                  child: const Icon(Icons.send_rounded,
-                      color: Colors.white, size: 20))),
-        ]),
+      child: Row(children: [
+        Expanded(
+            child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                    color:
+                        isDark ? AppColors.deepNavy : AppColors.lightBackground,
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(
+                        color: isDark
+                            ? AppColors.goldenBronze.withOpacity(0.2)
+                            : Colors.grey.shade300)),
+                child: TextField(
+                    controller: _commentController,
+                    style: TextStyle(color: textC, fontSize: 14),
+                    maxLines: null,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _submitComment(),
+                    decoration: InputDecoration(
+                        hintText: "اكتب تعليقك...",
+                        hintStyle:
+                            TextStyle(color: AppColors.grey, fontSize: 13),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 10))))),
+        const SizedBox(width: 8),
+        GestureDetector(
+            onTap: _isSending ? null : _submitComment,
+            child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                    color: _isSending
+                        ? AppColors.goldenBronze.withOpacity(0.5)
+                        : AppColors.goldenBronze,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                          color: AppColors.goldenBronze.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3))
+                    ]),
+                child: _isSending
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.send_rounded,
+                        color: Colors.white, size: 20))),
       ]),
     );
-  }
-
-  void _submitComment() {
-    final text = _commentController.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      if (_replyingTo != null) {
-        (_comments[_replyingTo!]["replies"] as List).add({
-          "user": "أنت",
-          "avatar": "https://i.pravatar.cc/150?img=11",
-          "text": text,
-          "time": "الآن",
-          "likes": 0,
-          "liked": false,
-        });
-        _comments[_replyingTo!]["showReplies"] = true;
-        _replyingTo = null;
-      } else {
-        _comments.insert(0, {
-          "user": "أنت",
-          "avatar": "https://i.pravatar.cc/150?img=11",
-          "text": text,
-          "time": "الآن",
-          "likes": 0,
-          "liked": false,
-          "mood": "😊",
-          "replies": [],
-        });
-      }
-    });
-    _commentController.clear();
   }
 }

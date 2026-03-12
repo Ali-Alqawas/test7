@@ -152,8 +152,8 @@ class _PremiumBundledOffersSectionState
             }
 
             return {
-              // الباك إند يرسل المعرف باسم group_id
-              "id": b['group_id']?.toString() ?? b['id']?.toString() ?? '',
+              // المعرف الحقيقي للمجموعة
+              "id": (b['group_id'] ?? b['id'] ?? '').toString(),
 
               // الباك إند يرسل الاسم باسم name وليس title
               "title":
@@ -419,8 +419,8 @@ class _PremiumBundledOffersSectionState
                               ]),
                           OfferActionButtons(
                               isDarkMode: widget.isDarkMode,
-                              offerId:
-                                  bundle["id"] ?? "BUNDLE_${bundle["title"]}"),
+                              offerId: (bundle["id"] ?? "").toString(),
+                              isGroup: true),
                         ],
                       ),
                     ],

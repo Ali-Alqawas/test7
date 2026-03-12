@@ -99,6 +99,14 @@ class ApiConstants {
   // ❤️ Social | Interactions
   // ──────────────────────────────────────────────────────────────
   static const String favorites = '/social/favorites/';
+  static const String likes = '/social/likes/';
+  // REST pattern:
+  //   إضافة: POST /social/favorites/ body: {"product": id}
+  //   حذف:  DELETE /social/favorites/{record_id}/
+  //   نفس الشيء لللايكات عبر /social/likes/
+  static String deleteFavorite(int recordId) => '/social/favorites/$recordId/';
+  static String deleteLike(int recordId) => '/social/likes/$recordId/';
+  // للتوافق مع الكود القديم (لا تستخدمها — استخدم SocialProvider)
   static String toggleFavorite(String productId) =>
       '/social/products/$productId/favorite/';
   static String toggleLike(String productId) =>
@@ -111,6 +119,7 @@ class ApiConstants {
   // 💬 Social | Comments
   // ──────────────────────────────────────────────────────────────
   static const String comments = '/social/comments/';
+  static String deleteComment(int commentId) => '/social/comments/$commentId/';
   static String productComments(String productId) =>
       '/social/products/$productId/comments/';
 
@@ -128,11 +137,17 @@ class ApiConstants {
   // ──────────────────────────────────────────────────────────────
   // 🎁 Rewards
   // ──────────────────────────────────────────────────────────────
+  static const String rewardsPoints = '/rewards/points/';
   static const String pointsBalance = '/rewards/points/balance/';
   static const String pointsHistory = '/rewards/points/history/';
+  static const String rewardsTransactions = '/rewards/transactions/';
   static const String draws = '/rewards/draws/';
   static const String currentDraw = '/rewards/draws/current/';
   static String enterDraw(String id) => '/rewards/draws/$id/enter/';
+  static String drawDetails(String id) => '/rewards/draws/$id/';
+  static String drawEntries(String id) => '/rewards/draws/$id/entries/';
+  static const String rewardsReferralCode = '/rewards/referral-code/';
+  static const String rewardsReferralStats = '/rewards/referral-stats/';
   static const String rewardItems = '/rewards/items/';
   static const String redeemPoints = '/rewards/redeem/';
   static const String redemptions = '/rewards/redemptions/';
@@ -156,8 +171,10 @@ class ApiConstants {
   // 🎫 Support | Tickets
   // ──────────────────────────────────────────────────────────────
   static const String tickets = '/support/tickets/';
+  static String ticketDetails(String id) => '/support/tickets/$id/';
   static String replyTicket(String id) => '/support/tickets/$id/reply/';
   static String closeTicket(String id) => '/support/tickets/$id/close/';
+  static const String ticketStats = '/support/tickets/stats/';
 
   // ──────────────────────────────────────────────────────────────
   // 🤖 Chatbot

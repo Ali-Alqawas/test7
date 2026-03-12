@@ -4,8 +4,46 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/providers/auth_provider.dart';
 
-class RewardsScreen extends StatelessWidget {
+class RewardsScreen extends StatefulWidget {
   const RewardsScreen({super.key});
+
+  @override
+  State<RewardsScreen> createState() => _RewardsScreenState();
+}
+
+class _RewardsScreenState extends State<RewardsScreen> {
+  List<Map<String, dynamic>> _history = [];
+  bool _loading = true;
+  String? _referralCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _loading = true);
+    final auth = context.read<AuthProvider>();
+
+    // جلب رصيد النقاط
+    await auth.fetchPointsBalance();
+
+    // جلب سجل العمليات
+    final history = await auth.fetchPointsHistory();
+    if (mounted) {
+      setState(() => _history = history);
+    }
+
+    // جلب رمز الإحالة
+    await auth.fetchReferralCode();
+    if (mounted) {
+      setState(() {
+        _referralCode = auth.referralCode;
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,51 +54,7 @@ class RewardsScreen extends StatelessWidget {
     final borderC = isDark
         ? AppColors.goldenBronze.withOpacity(0.15)
         : Colors.grey.shade200;
-
-    final history = [
-      {
-        "title": "إحالة صديق",
-        "points": "+50",
-        "date": "25 فبراير",
-        "icon": Icons.person_add_rounded,
-        "positive": true
-      },
-      {
-        "title": "مشاركة عرض",
-        "points": "+10",
-        "date": "24 فبراير",
-        "icon": Icons.share_rounded,
-        "positive": true
-      },
-      {
-        "title": "دخول سحب iPhone",
-        "points": "-200",
-        "date": "23 فبراير",
-        "icon": Icons.redeem_rounded,
-        "positive": false
-      },
-      {
-        "title": "تسجيل دخول يومي",
-        "points": "+5",
-        "date": "23 فبراير",
-        "icon": Icons.login_rounded,
-        "positive": true
-      },
-      {
-        "title": "تقييم متجر",
-        "points": "+15",
-        "date": "22 فبراير",
-        "icon": Icons.star_rounded,
-        "positive": true
-      },
-      {
-        "title": "إحالة صديق",
-        "points": "+50",
-        "date": "20 فبراير",
-        "icon": Icons.person_add_rounded,
-        "positive": true
-      },
-    ];
+    final auth = context.watch<AuthProvider>();
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -78,159 +72,219 @@ class RewardsScreen extends StatelessWidget {
                   color: textC, fontSize: 18, fontWeight: FontWeight.w900)),
           centerTitle: true,
         ),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            // Points wallet card
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [
-                  AppColors.goldenBronze,
-                  AppColors.goldenBronze.withOpacity(0.7)
-                ], begin: Alignment.topRight, end: Alignment.bottomLeft),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                      color: AppColors.goldenBronze.withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8))
-                ],
-              ),
-              child: Column(
-                children: [
-                  const Text("رصيدك الحالي",
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Text(
-                      context
-                              .watch<AuthProvider>()
-                              .userProfile?['points']
-                              ?.toString() ??
-                          '0',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 42,
-                          fontWeight: FontWeight.w900)),
-                  const Text("نقطة",
-                      style: TextStyle(color: Colors.white70, fontSize: 14)),
-                  const SizedBox(height: 20),
-                  // Referral
-                  GestureDetector(
-                    onTap: () {
-                      Clipboard.setData(const ClipboardData(text: "HAZEM2024"));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: const Text("تم نسخ رابط الإحالة ✓"),
-                            backgroundColor: AppColors.goldenBronze,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12))),
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.copy_rounded,
-                                color: Colors.white, size: 18),
-                            SizedBox(width: 8),
-                            Text("انسخ رابط الإحالة",
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold)),
-                          ]),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // How to earn
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: cardC,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: borderC)),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        body: RefreshIndicator(
+          color: AppColors.goldenBronze,
+          onRefresh: _loadData,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics()),
+            children: [
+              // Points wallet card
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [
+                    AppColors.goldenBronze,
+                    AppColors.goldenBronze.withOpacity(0.7)
+                  ], begin: Alignment.topRight, end: Alignment.bottomLeft),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                        color: AppColors.goldenBronze.withOpacity(0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8))
+                  ],
+                ),
+                child: Column(
                   children: [
-                    Text("كيف تكسب النقاط؟",
-                        style: TextStyle(
-                            color: textC,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 12),
-                    _earnWay("إحالة صديق", "+50 نقطة", Icons.person_add_rounded,
-                        textC),
-                    _earnWay(
-                        "مشاركة عرض", "+10 نقاط", Icons.share_rounded, textC),
-                    _earnWay(
-                        "تقييم متجر", "+15 نقطة", Icons.star_rounded, textC),
-                    _earnWay("تسجيل دخول يومي", "+5 نقاط", Icons.login_rounded,
-                        textC),
-                  ]),
-            ),
-            const SizedBox(height: 24),
-            Text("سجل العمليات",
-                style: TextStyle(
-                    color: textC, fontSize: 16, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 12),
-            ...history.map((h) => Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                      color: cardC,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: borderC)),
-                  child: Row(children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: (h["positive"] as bool)
-                            ? AppColors.goldenBronze.withOpacity(0.1)
-                            : AppColors.error.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(h["icon"] as IconData,
-                          color: (h["positive"] as bool)
-                              ? AppColors.goldenBronze
-                              : AppColors.error,
-                          size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    const Text("رصيدك الحالي",
+                        style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Text(auth.pointsBalance.toString(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 42,
+                            fontWeight: FontWeight.w900)),
+                    const Text("نقطة",
+                        style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    const SizedBox(height: 20),
+                    // Referral
+                    GestureDetector(
+                      onTap: () {
+                        final code = _referralCode ?? auth.referralCode ?? '';
+                        if (code.isNotEmpty) {
+                          Clipboard.setData(ClipboardData(text: code));
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(code.isNotEmpty
+                                  ? "تم نسخ رمز الإحالة: $code ✓"
+                                  : "تم نسخ رمز الإحالة ✓"),
+                              backgroundColor: AppColors.goldenBronze,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12)),
+                        child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                          Text(h["title"] as String,
-                              style: TextStyle(
-                                  color: textC,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700)),
-                          Text(h["date"] as String,
-                              style: TextStyle(
-                                  color: textC.withOpacity(0.4), fontSize: 11)),
-                        ])),
-                    Text(h["points"] as String,
-                        style: TextStyle(
-                          color: (h["positive"] as bool)
-                              ? Colors.green
-                              : AppColors.error,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                        )),
-                  ]),
-                )),
-          ],
+                              const Icon(Icons.copy_rounded,
+                                  color: Colors.white, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                  _referralCode != null &&
+                                          _referralCode!.isNotEmpty
+                                      ? "رمز الإحالة: $_referralCode"
+                                      : "انسخ رابط الإحالة",
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold)),
+                            ]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // How to earn
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: cardC,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: borderC)),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("كيف تكسب النقاط؟",
+                          style: TextStyle(
+                              color: textC,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 12),
+                      _earnWay("إحالة صديق", "+50 نقطة",
+                          Icons.person_add_rounded, textC),
+                      _earnWay(
+                          "مشاركة عرض", "+10 نقاط", Icons.share_rounded, textC),
+                      _earnWay(
+                          "تقييم متجر", "+15 نقطة", Icons.star_rounded, textC),
+                      _earnWay("تسجيل دخول يومي", "+5 نقاط",
+                          Icons.login_rounded, textC),
+                    ]),
+              ),
+              const SizedBox(height: 24),
+              Text("سجل العمليات",
+                  style: TextStyle(
+                      color: textC, fontSize: 16, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.all(30),
+                  child: Center(
+                      child: CircularProgressIndicator(
+                          color: AppColors.goldenBronze, strokeWidth: 2)),
+                )
+              else if (_history.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(30),
+                  child: Center(
+                    child: Column(children: [
+                      Icon(Icons.receipt_long_rounded,
+                          color: textC.withOpacity(0.2), size: 48),
+                      const SizedBox(height: 12),
+                      Text("لا توجد عمليات بعد",
+                          style: TextStyle(
+                              color: textC.withOpacity(0.4), fontSize: 14)),
+                    ]),
+                  ),
+                )
+              else
+                ..._history.map((h) {
+                  final title =
+                      h['title'] ?? h['description'] ?? h['type'] ?? 'عملية';
+                  final pts = h['points'] ?? h['amount'] ?? 0;
+                  final isPositive =
+                      pts is int ? pts > 0 : pts.toString().startsWith('+');
+                  final ptsStr = pts is int
+                      ? (isPositive ? '+$pts' : '$pts')
+                      : pts.toString();
+                  final date = h['date'] ??
+                      h['created_at']?.toString().substring(0, 10) ??
+                      '';
+                  final iconMap = {
+                    'referral': Icons.person_add_rounded,
+                    'share': Icons.share_rounded,
+                    'login': Icons.login_rounded,
+                    'rating': Icons.star_rounded,
+                    'draw': Icons.redeem_rounded,
+                    'redeem': Icons.redeem_rounded,
+                  };
+                  final type = (h['type'] ?? '').toString().toLowerCase();
+                  final icon = iconMap.entries
+                      .firstWhere((e) => type.contains(e.key),
+                          orElse: () =>
+                              MapEntry('default', Icons.swap_horiz_rounded))
+                      .value;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                        color: cardC,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: borderC)),
+                    child: Row(children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: isPositive
+                              ? AppColors.goldenBronze.withOpacity(0.1)
+                              : AppColors.error.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(icon,
+                            color: isPositive
+                                ? AppColors.goldenBronze
+                                : AppColors.error,
+                            size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            Text(title.toString(),
+                                style: TextStyle(
+                                    color: textC,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700)),
+                            Text(date.toString(),
+                                style: TextStyle(
+                                    color: textC.withOpacity(0.4),
+                                    fontSize: 11)),
+                          ])),
+                      Text(ptsStr,
+                          style: TextStyle(
+                            color: isPositive ? Colors.green : AppColors.error,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                          )),
+                    ]),
+                  );
+                }),
+            ],
+          ),
         ),
       ),
     );

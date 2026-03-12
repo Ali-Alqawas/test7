@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/offer_action_buttons.dart';
+import '../../../data/providers/social_provider.dart';
 import '../details/offer_details_screen.dart';
+import '../details/merchant_profile_screen.dart';
 
 // ============================================================================
 // شاشة المفضلة — تجلب من API
@@ -29,60 +32,145 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   Future<void> _fetchFavorites() async {
     try {
+      List<Map<String, dynamic>> items = [];
+
+      // ── 1. جلب المفضلة (منتجات فردية) ──
       final data = await _api.get(ApiConstants.favorites);
-
-      debugPrint('بيانات المفضلة القادمة من الباك إند: $data');
-
       final List rawFavorites =
           data is Map ? (data['results'] ?? []) : (data is List ? data : []);
 
-      if (mounted) {
-        setState(() {
-          _favorites = rawFavorites.map<Map<String, dynamic>>((item) {
-            // قد تكون البيانات embedded أو مرجعية
-            final product = item['product'] ?? item;
+      for (var item in rawFavorites) {
+        final productField = item['product'];
+        final productMap = await _fetchProductDetails(productField);
+        final String productId = (productField is int || productField is String)
+            ? productField.toString()
+            : (productMap?['product_id']?.toString() ??
+                productMap?['id']?.toString() ??
+                '');
 
-            var images = product['images'] as List?;
-            String imageUrl = (images != null && images.isNotEmpty)
-                ? ApiConstants.resolveImageUrl(
-                    images[0]['image_url']?.toString())
-                : ApiConstants.resolveImageUrl(product['image']?.toString() ??
-                    product['thumbnail']?.toString());
+        items.add(_buildFavItem(productId, productMap, isGroup: false));
+      }
 
-            String storeName = product['store_name'] ?? 'متجر غير معروف';
-            String storeLogo = product['store_logo'] != null
-                ? ApiConstants.resolveImageUrl(product['store_logo'].toString())
-                : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
+      // ── 2. جلب المفضلة (مجموعات / باقات) ──
+      try {
+        final groupData = await _api.get('/social/group-favorites/');
+        final List rawGroupFavs = groupData is Map
+            ? (groupData['results'] ?? [])
+            : (groupData is List ? groupData : []);
 
-            // حساب الخصم
-            double price =
-                double.tryParse(product['price']?.toString() ?? '0') ?? 0;
-            double oldPrice =
-                double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
-            String discount = '';
-            if (oldPrice > price && oldPrice > 0) {
-              discount =
-                  '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
+        if (rawGroupFavs.isNotEmpty) {
+          // جلب كل المجموعات دفعة واحدة (لا يوجد detail endpoint)
+          Map<String, Map<String, dynamic>> allGroups = {};
+          try {
+            final allGroupsData = await _api.get(
+              ApiConstants.productGroups,
+              queryParams: {'page_size': '100'},
+              requiresAuth: false,
+            );
+            final List groupsList = allGroupsData is Map
+                ? (allGroupsData['results'] ?? [])
+                : (allGroupsData is List ? allGroupsData : []);
+            for (var g in groupsList) {
+              final gId = (g['group_id'] ?? g['id'] ?? '').toString();
+              if (gId.isNotEmpty) allGroups[gId] = Map<String, dynamic>.from(g);
+            }
+          } catch (e) {
+            debugPrint('⚠️ فشل جلب قائمة المجموعات: $e');
+          }
+
+          for (var item in rawGroupFavs) {
+            final groupField = item['product_group'];
+            String groupId = (groupField ?? '').toString();
+            final b = allGroups[groupId]; // b = بيانات المجموعة الكاملة
+
+            if (b == null) {
+              // إذا ما لقينا المجموعة → نتخطاها
+              continue;
             }
 
-            return {
-              "id": product['product_id']?.toString() ??
-                  product['id']?.toString() ??
-                  '',
-              "title": product['title'] ?? 'بدون عنوان',
+            // ── نفس منطق premium_bundled_offers.dart بالضبط ──
+
+            // 1. اسم المتجر
+            String storeName = b['store_name']?.toString().trim() ?? '';
+            if (storeName.isEmpty &&
+                b['products'] is List &&
+                (b['products'] as List).isNotEmpty) {
+              storeName =
+                  b['products'][0]['store_name']?.toString().trim() ?? 'متجر';
+            }
+            if (storeName.isEmpty || storeName == 'null') storeName = 'متجر';
+
+            // 2. السعر والصور
+            double bundlePrice =
+                double.tryParse(b['price']?.toString() ?? '0') ?? 0;
+            double sumOfIndividualPrices = 0;
+            List<String> images = [];
+            if (b['products'] is List) {
+              for (var p in b['products']) {
+                double pPrice =
+                    double.tryParse(p['price']?.toString() ?? '0') ?? 0;
+                sumOfIndividualPrices += pPrice;
+                if (p['images'] is List && (p['images'] as List).isNotEmpty) {
+                  images.add(ApiConstants.resolveImageUrl(
+                      p['images'][0]['image_url']?.toString()));
+                } else if (p['image'] != null) {
+                  images
+                      .add(ApiConstants.resolveImageUrl(p['image'].toString()));
+                }
+              }
+            }
+            // صورة المجموعة نفسها كبديل
+            if (images.isEmpty && b['image_url'] != null) {
+              images
+                  .add(ApiConstants.resolveImageUrl(b['image_url'].toString()));
+            }
+            if (images.isEmpty)
+              images.add('https://placehold.co/400x400/png?text=Bundle');
+
+            // 3. حساب التوفير
+            double displayOldPrice = 0;
+            String discount = '';
+            if (sumOfIndividualPrices > bundlePrice && bundlePrice > 0) {
+              displayOldPrice = sumOfIndividualPrices;
+              discount =
+                  '${((displayOldPrice - bundlePrice) / displayOldPrice * 100).toStringAsFixed(0)}%';
+            }
+
+            String storeLogo = b['store_logo'] != null
+                ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
+                : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
+
+            items.add({
+              "id": groupId,
+              "title": '📦 ${b['name']?.toString() ?? 'باقة'}',
+              "store": storeName,
               "storeName": storeName,
               "storeLogo": storeLogo,
-              "image": imageUrl,
-              "price": "${product['price'] ?? '0'}\$",
-              "oldPrice": oldPrice > 0 ? "${product['old_price']}\$" : "",
+              "image": images.first,
+              "images": images,
+              "isLocalImage": false,
+              "price": bundlePrice > 0 ? "${bundlePrice.toInt()}\$" : "0\$",
+              "oldPrice":
+                  displayOldPrice > 0 ? "${displayOldPrice.toInt()}\$" : "",
+              "saving": displayOldPrice > bundlePrice
+                  ? "وفر ${(displayOldPrice - bundlePrice).toInt()}\$"
+                  : "",
               "discount": discount,
-              "category": product['category_name'] ?? '',
-              "offerType":
-                  product['is_featured'] == true ? 'featured' : 'standard',
-              "is_liked": product['is_liked'] ?? false,
-              "is_favorited": true,
-            };
-          }).toList();
+              "products": b['products'] ?? [],
+              "category": '',
+              "offerType": 'bundled',
+              "isGroup": true,
+              "original_data": b,
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ خطأ في جلب مفضلة المجموعات: $e');
+      }
+
+      if (mounted) {
+        setState(() {
+          _favorites = items;
           _isLoading = false;
         });
       }
@@ -92,16 +180,109 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
   }
 
+  /// جلب بيانات المنتج الكاملة
+  Future<Map<String, dynamic>?> _fetchProductDetails(
+      dynamic productField) async {
+    if (productField is int || productField is String) {
+      try {
+        final productData = await _api.get('/catalog/products/$productField/',
+            requiresAuth: false);
+        if (productData != null && productData is Map) {
+          return Map<String, dynamic>.from(productData);
+        }
+      } catch (e) {
+        debugPrint('⚠️ فشل جلب المنتج $productField: $e');
+      }
+    } else if (productField is Map) {
+      return Map<String, dynamic>.from(productField);
+    }
+    return null;
+  }
+
+  /// بناء عنصر مفضلة لمنتج فردي
+  Map<String, dynamic> _buildFavItem(
+      String productId, Map<String, dynamic>? product,
+      {required bool isGroup}) {
+    String imageUrl = '';
+    String storeName = 'متجر';
+    String storeLogo = '';
+    String title = 'منتج #$productId';
+    String priceStr = '0\$';
+    String oldPriceStr = '';
+    String discount = '';
+
+    if (product != null) {
+      var images = product['images'];
+      if (images is List && images.isNotEmpty) {
+        final firstImg = images[0];
+        if (firstImg is Map) {
+          imageUrl = ApiConstants.resolveImageUrl(
+              firstImg['image_url']?.toString() ??
+                  firstImg['image']?.toString());
+        } else if (firstImg is String) {
+          imageUrl = ApiConstants.resolveImageUrl(firstImg);
+        }
+      } else if (product['image'] != null) {
+        imageUrl = ApiConstants.resolveImageUrl(product['image'].toString());
+      }
+
+      title = product['title']?.toString() ?? title;
+      storeName = product['store_name']?.toString() ?? 'متجر';
+      if (product['store_logo'] != null) {
+        storeLogo =
+            ApiConstants.resolveImageUrl(product['store_logo'].toString());
+      }
+
+      double price = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
+      double oldPrice =
+          double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
+      priceStr = '${price.toStringAsFixed(price == price.toInt() ? 0 : 2)}\$';
+      if (oldPrice > 0) {
+        oldPriceStr =
+            '${oldPrice.toStringAsFixed(oldPrice == oldPrice.toInt() ? 0 : 2)}\$';
+      }
+      if (oldPrice > price && oldPrice > 0) {
+        discount =
+            '${((oldPrice - price) / oldPrice * 100).toStringAsFixed(0)}%';
+      }
+    }
+
+    if (storeLogo.isEmpty) {
+      storeLogo =
+          'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
+    }
+    if (imageUrl.isEmpty) {
+      imageUrl = 'https://placehold.co/400x400/png?text=No+Image';
+    }
+
+    return {
+      "id": productId,
+      "title": title,
+      "storeName": storeName,
+      "storeLogo": storeLogo,
+      "image": imageUrl,
+      "price": priceStr,
+      "oldPrice": oldPriceStr,
+      "discount": discount,
+      "category": product?['category_name']?.toString() ?? '',
+      "offerType": product?['is_featured'] == true ? 'featured' : 'standard',
+      "isGroup": isGroup,
+    };
+  }
+
   Future<void> _removeItem(int index) async {
     final item = _favorites[index];
-    final productId = item['id'];
+    final itemId = item['id']?.toString() ?? '';
+    final bool isGroup = item['isGroup'] == true;
     setState(() => _favorites.removeAt(index));
 
-    if (productId.isNotEmpty) {
-      try {
-        await _api.post(ApiConstants.toggleFavorite(productId));
-      } catch (e) {
-        debugPrint('خطأ في إزالة المفضلة: $e');
+    if (itemId.isNotEmpty && mounted) {
+      final social = context.read<SocialProvider>();
+      final success = isGroup
+          ? await social.toggleGroupFavorite(itemId)
+          : await social.toggleFavorite(itemId);
+      if (!success) {
+        debugPrint('خطأ في إزالة المفضلة');
       }
     }
   }
@@ -261,8 +442,251 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
+  // ── نفس _buildRobustDynamicCollage من premium_bundled_offers.dart بالضبط ──
+  Widget _buildDynamicCollage(List<String> images, Color separatorColor) {
+    int count = images.length;
+
+    Widget imageBox(String path) {
+      return Container(
+        foregroundDecoration: BoxDecoration(
+            border: Border.all(color: separatorColor, width: 0.5)),
+        child: Image.network(path,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            errorBuilder: (_, __, ___) => Container(
+                color: Colors.grey.shade200,
+                child: const Icon(Icons.broken_image, color: Colors.grey))),
+      );
+    }
+
+    if (count == 1) {
+      return imageBox(images[0]);
+    } else if (count == 2) {
+      return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(child: imageBox(images[0])),
+        Expanded(child: imageBox(images[1]))
+      ]);
+    } else if (count == 3) {
+      return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(flex: 3, child: imageBox(images[0])),
+        Expanded(
+            flex: 2,
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: imageBox(images[1])),
+                  Expanded(child: imageBox(images[2]))
+                ])),
+      ]);
+    } else {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(
+            child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+              Expanded(child: imageBox(images[0])),
+              Expanded(child: imageBox(images[1]))
+            ])),
+        Expanded(
+            child:
+                Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: imageBox(images[2])),
+          Expanded(
+              child: Stack(fit: StackFit.expand, children: [
+            imageBox(images[3]),
+            if (count > 4)
+              Container(
+                  color: Colors.black.withOpacity(0.6),
+                  child: Center(
+                      child: Text("+${count - 4}",
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18)))),
+          ])),
+        ])),
+      ]);
+    }
+  }
+
+  // ── كرت الباقة المفضلة — نفس premium_bundled_offers._buildBundleCard ──
+  Widget _buildBundleFavoriteCard(
+      Map<String, dynamic> bundle, bool isDarkMode, int index) {
+    final Color cardBg = isDarkMode ? AppColors.deepNavy : AppColors.pureWhite;
+    final Color borderColor = isDarkMode
+        ? AppColors.goldenBronze.withOpacity(0.3)
+        : Colors.grey.shade200;
+
+    return Dismissible(
+      key: Key("bundle_${bundle["id"]}_$index"),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: AppColors.error,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 30),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.delete_outline_rounded, color: Colors.white, size: 28),
+            SizedBox(height: 4),
+            Text("حذف",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+      onDismissed: (_) => _removeItem(index),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => OfferDetailsScreen(
+                    offerData: bundle, offerType: OfferDetailType.bundled))),
+        child: Container(
+          height: 160,
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: 1.2),
+            boxShadow: [
+              if (!isDarkMode)
+                BoxShadow(
+                    color: AppColors.goldenBronze.withOpacity(0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5)),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 155,
+                  child: _buildDynamicCollage(
+                    (bundle["images"] as List).cast<String>(),
+                    isDarkMode ? AppColors.deepNavy : Colors.white,
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if ((bundle["saving"] ?? '').isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                                color: AppColors.error.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4)),
+                            child: Text(bundle["saving"],
+                                style: const TextStyle(
+                                    color: AppColors.error,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                        const SizedBox(height: 6),
+                        Text(bundle["title"],
+                            style: TextStyle(
+                                color: isDarkMode
+                                    ? AppColors.pureWhite
+                                    : AppColors.lightText,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                height: 1.2),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          Container(
+                              padding: const EdgeInsets.all(1.5),
+                              decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: borderColor)),
+                              child: GestureDetector(
+                                onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) => MerchantProfileScreen(
+                                            storeName:
+                                                bundle["store"] ?? "متجر",
+                                            storeLogo: bundle["storeLogo"] ??
+                                                "https://i.pravatar.cc/150?img=11"))),
+                                child: CircleAvatar(
+                                    radius: 9,
+                                    backgroundColor: AppColors.lightBackground,
+                                    backgroundImage:
+                                        NetworkImage(bundle["storeLogo"])),
+                              )),
+                          const SizedBox(width: 4),
+                          Expanded(
+                              child: Text(
+                                  bundle["store"] ??
+                                      bundle["storeName"] ??
+                                      "متجر",
+                                  style: const TextStyle(
+                                      color: AppColors.grey,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis)),
+                        ]),
+                        const Spacer(),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(bundle["price"],
+                                      style: const TextStyle(
+                                          color: AppColors.goldenBronze,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w900)),
+                                  if ((bundle["oldPrice"] ?? '').isNotEmpty)
+                                    Text(bundle["oldPrice"],
+                                        style: const TextStyle(
+                                            color: AppColors.grey,
+                                            fontSize: 10,
+                                            decoration:
+                                                TextDecoration.lineThrough)),
+                                ]),
+                            OfferActionButtons(
+                                isDarkMode: isDarkMode,
+                                offerId: (bundle["id"] ?? "").toString(),
+                                isGroup: true),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFavoriteCard(
       Map<String, dynamic> item, bool isDarkMode, int index) {
+    // ── باقة؟ → نفس كرت الرئيسية بالضبط ──
+    if (item["isGroup"] == true) {
+      return _buildBundleFavoriteCard(item, isDarkMode, index);
+    }
+
     final Color cardC =
         isDarkMode ? const Color(0xFF072A38) : AppColors.pureWhite;
     final Color borderC = isDarkMode
@@ -431,8 +855,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                 ]),
                             OfferActionButtons(
                                 isDarkMode: isDarkMode,
-                                offerId: item["id"] ?? "FAV_${item["title"]}",
-                                initialIsFavorited: true),
+                                offerId: (item["id"] ?? "").toString(),
+                                isGroup: item["isGroup"] == true),
                           ],
                         ),
                       ],

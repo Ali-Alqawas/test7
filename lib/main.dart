@@ -272,6 +272,7 @@ import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_manager.dart';
 import 'data/providers/auth_provider.dart';
+import 'data/providers/social_provider.dart';
 import 'presentation/screens/splash/splash_screen.dart';
 
 void main() {
@@ -289,6 +290,7 @@ class GraduationProjectApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => SocialProvider()),
         // سيتم إضافة المزيد لاحقاً:
         // ChangeNotifierProvider(create: (_) => OffersProvider()),
         // ChangeNotifierProvider(create: (_) => FavoritesProvider()),

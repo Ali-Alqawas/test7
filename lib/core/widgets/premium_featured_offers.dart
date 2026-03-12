@@ -61,7 +61,7 @@ class _PremiumFeaturedOffersSectionState
                 : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
             return {
-              "id": apiOffer['product_id']?.toString() ?? "",
+              "id": (apiOffer['product_id'] ?? apiOffer['id'] ?? '').toString(),
               "title": apiOffer['title'] ?? 'بدون عنوان',
               "storeName": storeName,
               "storeLogo": storeLogo,
@@ -313,10 +313,7 @@ class _PremiumFeaturedOffersSectionState
                               ]),
                           OfferActionButtons(
                               isDarkMode: widget.isDarkMode,
-                              offerId: offer["id"] ?? "FEAT_${offer["title"]}",
-                              initialIsLiked: offer["is_liked"] ?? false,
-                              initialIsFavorited:
-                                  offer["is_favorited"] ?? false),
+                              offerId: (offer["id"] ?? "").toString()),
                         ],
                       ),
                     ],
