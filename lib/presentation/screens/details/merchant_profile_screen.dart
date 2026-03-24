@@ -1,20 +1,30 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/network/api_constants.dart';
+import '../../../core/helpers/auth_guard.dart';
+import '../../../core/widgets/premium_standard_offer_card.dart';
+import '../../../core/widgets/premium_featured_offers.dart';
+import '../../../core/widgets/premium_bundled_offers.dart';
+import '../../../core/widgets/premium_brochures_section.dart';
+import '../../../data/providers/social_provider.dart';
 import '../../screens/details/merchant_chat_screen.dart';
-import '../../screens/details/offer_details_screen.dart';
 
 // ============================================================================
-// شاشة ملف المتجر — التصميم الجديد
+// شاشة ملف المتجر — التصميم الجديد مع بيانات حقيقية
 // ============================================================================
 class MerchantProfileScreen extends StatefulWidget {
+  final String storeId;
   final String storeName;
   final String storeLogo;
 
   const MerchantProfileScreen({
     super.key,
+    required this.storeId,
     required this.storeName,
     required this.storeLogo,
   });
@@ -26,171 +36,110 @@ class MerchantProfileScreen extends StatefulWidget {
 class _MerchantProfileScreenState extends State<MerchantProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
-  bool _isFollowing = false;
+  final ApiService _api = ApiService();
 
-  // -------- بيانات وهمية --------
-  final String _category = "هايبر ماركت متكامل";
-  final double _rating = 4.8;
-  final int _reviewsCount = 1240;
-  final String _location = "الرياض، حي العليا";
-  final String _coverUrl =
-      "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80";
+  // ── بيانات المتجر ──
+  String _description = '';
+  String _location = '';
+  String _activityType = '';
+  String _workingHours = '';
+  String _coverUrl = '';
+  String _logoUrl = ''; // اللوجو الحقيقي من API
+  String _phone = '';
+  String _email = '';
+  double _rating = 0;
+  int _ratingCount = 0;
+  int _followersCount = 0;
+  int _offersCount = 0;
+  bool _isVerified = false;
+  int? _storeOwnerId;
 
-  final List<Map<String, dynamic>> _contactInfo = [
-    {"icon": Icons.phone_rounded, "title": "+966 50 123 4567", "type": "هاتف"},
-    {"icon": Icons.email_rounded, "title": "support@store.com", "type": "بريد"},
-    {
-      "icon": Icons.camera_alt_rounded,
-      "title": "@Store_SA",
-      "type": "انستقرام"
-    },
-    {"icon": Icons.facebook_rounded, "title": "Store SA", "type": "فيس بوك"},
-    {
-      "icon": Icons.chat_rounded,
-      "title": "+966 50 123 4567",
-      "type": "واتس اب"
-    },
-  ];
-
-  final List<Map<String, dynamic>> _offers = [
-    {
-      "title": "سماعة ابل ايربودز برو 2",
-      "image":
-          "https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?auto=format&fit=crop&w=500&q=80",
-      "price": "199\$",
-      "oldPrice": "349\$",
-      "discount": "43%",
-    },
-    {
-      "title": "ساعة ذكية Amazfit GTS",
-      "image":
-          "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80",
-      "price": "89\$",
-      "oldPrice": "159\$",
-      "discount": "44%",
-    },
-    {
-      "title": "حقيبة ظهر رياضية Nike",
-      "image":
-          "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=500&q=80",
-      "price": "45\$",
-      "oldPrice": "90\$",
-      "discount": "50%",
-    },
-    {
-      "title": "نظارة شمسية كلاسيكية",
-      "image":
-          "https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=500&q=80",
-      "price": "120\$",
-      "oldPrice": "250\$",
-      "discount": "52%",
-    },
-    {
-      "title": "كاميرا فورية Instax",
-      "image":
-          "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=500&q=80",
-      "price": "65\$",
-      "oldPrice": "110\$",
-      "discount": "40%",
-    },
-    {
-      "title": "سماعة لاسلكية JBL",
-      "image":
-          "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=500&q=80",
-      "price": "35\$",
-      "oldPrice": "70\$",
-      "discount": "50%",
-    },
-  ];
-
-  final List<Map<String, dynamic>> _groups = [
-    {
-      "title": "باقة الصوتيات المتكاملة",
-      "items": ["سماعة ايربودز برو", "سماعة JBL", "حامل سماعات"],
-      "images": [
-        "https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?auto=format&fit=crop&w=300&q=80",
-        "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=300&q=80",
-        "https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=300&q=80",
-      ],
-      "totalPrice": "280\$",
-      "oldTotal": "470\$",
-      "discount": "40%",
-      "itemCount": 3,
-    },
-    {
-      "title": "باقة المسافر الذكي",
-      "items": ["حقيبة Nike", "نظارة شمسية", "ساعة ذكية"],
-      "images": [
-        "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=300&q=80",
-        "https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=300&q=80",
-        "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=300&q=80",
-      ],
-      "totalPrice": "199\$",
-      "oldTotal": "499\$",
-      "discount": "60%",
-      "itemCount": 3,
-    },
-    {
-      "title": "باقة الهدايا الفاخرة",
-      "items": ["كاميرا فورية", "نظارة شمسية", "سماعة JBL", "علبة هدية"],
-      "images": [
-        "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=300&q=80",
-        "https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=300&q=80",
-        "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=300&q=80",
-        "https://images.unsplash.com/photo-1513885535751-8b9238bd345a?auto=format&fit=crop&w=300&q=80",
-      ],
-      "totalPrice": "159\$",
-      "oldTotal": "380\$",
-      "discount": "58%",
-      "itemCount": 4,
-    },
-  ];
-
-  final List<Map<String, dynamic>> _reviews = [
-    {
-      "user": "أحمد محمد",
-      "avatar": "https://i.pravatar.cc/150?img=1",
-      "text": "متجر ممتاز جداً! الأسعار مناسبة والتوصيل سريع 👏",
-      "time": "منذ ساعتين",
-      "likes": 24,
-      "stars": 5
-    },
-    {
-      "user": "فاطمة يوسف",
-      "avatar": "https://i.pravatar.cc/150?img=9",
-      "text": "تجربة تسوق ممتازة، المنتجات أصلية ومضمونة",
-      "time": "منذ 5 ساعات",
-      "likes": 15,
-      "stars": 5
-    },
-    {
-      "user": "عمر العبدلي",
-      "avatar": "https://i.pravatar.cc/150?img=3",
-      "text": "خدمة العملاء سريعة في الرد، شكراً لكم",
-      "time": "منذ يوم",
-      "likes": 7,
-      "stars": 4
-    },
-    {
-      "user": "سارة الحربي",
-      "avatar": "https://i.pravatar.cc/150?img=5",
-      "text": "بعض المنتجات نفذت بسرعة، لكن المتجر بشكل عام ممتاز",
-      "time": "منذ 3 أيام",
-      "likes": 11,
-      "stars": 4
-    },
-  ];
+  // ── التقييمات ──
+  List<Map<String, dynamic>> _ratings = [];
+  bool _loadingRatings = true;
+  bool _hasRated = false;
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl = TabController(length: 5, vsync: this, initialIndex: 0);
+    _logoUrl = widget.storeLogo; // قيمة مبدئية من الصفحة السابقة
+    _fetchStoreDetails();
+    _fetchRatings();
+    try {
+      final social = context.read<SocialProvider>();
+      social.loadFollows();
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _tabCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchStoreDetails() async {
+    try {
+      final data = await _api.get(
+        ApiConstants.storeDetails(widget.storeId),
+        requiresAuth: false,
+      );
+      if (data is Map && mounted) {
+        setState(() {
+          _description = data['description']?.toString() ?? '';
+          _location = data['location']?.toString() ?? '';
+          _activityType = data['activity_type']?.toString() ?? '';
+          _workingHours = data['working_hours']?.toString() ?? '';
+          _phone = data['phone']?.toString() ?? '';
+          _email = data['email']?.toString() ?? '';
+          _coverUrl = data['cover_image']?.toString() ?? '';
+          if (_coverUrl.isNotEmpty) {
+            _coverUrl = ApiConstants.resolveImageUrl(_coverUrl);
+          }
+          // جلب اللوجو الحقيقي من بيانات المتجر
+          final apiLogo =
+              (data['logo'] ?? data['store_logo'])?.toString() ?? '';
+          if (apiLogo.isNotEmpty) {
+            _logoUrl = ApiConstants.resolveImageUrl(apiLogo);
+          }
+          _rating =
+              double.tryParse(data['average_rating']?.toString() ?? '0') ?? 0;
+          _ratingCount = data['rating_count'] as int? ?? 0;
+          _followersCount = data['followers_count'] as int? ?? 0;
+          _offersCount = data['offers_count'] as int? ?? 0;
+          _isVerified = data['verification_status'] == 'VERIFIED';
+          // owner user ID for chat
+          _storeOwnerId = data['user'] as int? ?? data['owner'] as int?;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ جلب بيانات المتجر: $e');
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _fetchRatings() async {
+    try {
+      final data = await _api.get(
+        ApiConstants.ratings,
+        queryParams: {'store': widget.storeId, 'page_size': '20'},
+        requiresAuth: false,
+      );
+      final List raw =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+      if (mounted) {
+        setState(() {
+          _ratings = raw.cast<Map<String, dynamic>>();
+          _loadingRatings = false;
+          // تحقق هل المستخدم قيّم مسبقاً
+          _hasRated = _ratings
+              .any((r) => r['is_owner'] == true || r['is_mine'] == true);
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ جلب التقييمات: $e');
+      if (mounted) setState(() => _loadingRatings = false);
+    }
   }
 
   // ====================================================================
@@ -216,25 +165,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
               SliverPersistentHeader(
                 pinned: true,
                 delegate: _StickyTabDelegate(
-                  TabBar(
-                    controller: _tabCtrl,
-                    labelColor: AppColors.goldenBronze,
-                    unselectedLabelColor: AppColors.grey,
-                    indicatorColor: AppColors.goldenBronze,
-                    indicatorWeight: 3,
-                    indicatorSize: TabBarIndicatorSize.label,
-                    isScrollable: true,
-                    labelStyle: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.bold),
-                    unselectedLabelStyle: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                    tabs: const [
-                      Tab(text: "كتيبات 📑"),
-                      Tab(text: "العروض 🔥"),
-                      Tab(text: "مميزة ⭐"),
-                      Tab(text: "باقات 📦"),
-                    ],
-                  ),
+                  _buildPillTabBar(isDark),
                   isDark,
                 ),
               ),
@@ -242,10 +173,36 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
             body: TabBarView(
               controller: _tabCtrl,
               children: [
-                _buildOffersTab(isDark, textC, cardC), // كتيبات
-                _buildOffersTab(isDark, textC, cardC), // عروض
-                _buildOffersTab(isDark, textC, cardC), // مميزة
-                _buildGroupsTab(isDark, textC, cardC), // باقات
+                // حول — أول تبويب
+                _buildAboutTab(isDark, textC, cardC),
+                // عروض
+                SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: PremiumStandardOffersSection(
+                      isDarkMode: isDark, storeId: widget.storeId),
+                ),
+                // مميزة
+                SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: PremiumFeaturedOffersSection(
+                      isDarkMode: isDark, storeId: widget.storeId),
+                ),
+                // باقات
+                SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: PremiumBundledOffersSection(
+                      isDarkMode: isDark, storeId: widget.storeId),
+                ),
+                // كتيبات
+                SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: FocusedBrochuresSection(
+                      isDarkMode: isDark, storeId: widget.storeId),
+                ),
               ],
             ),
           ),
@@ -255,7 +212,56 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
   }
 
   // ====================================================================
-  // HERO HEADER — Cover + Logo + Trust + Actions
+  // Pill-Shaped Tab Bar — مع حدود أنيقة
+  // ====================================================================
+  Widget _buildPillTabBar(bool isDark) {
+    final bgColor = isDark ? AppColors.deepNavy : AppColors.lightBackground;
+    final borderC =
+        isDark ? AppColors.goldenBronze.withOpacity(0.2) : Colors.grey.shade300;
+    final unselectedBg =
+        isDark ? Colors.white.withOpacity(0.06) : Colors.grey.shade100;
+
+    return Container(
+      color: bgColor,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: unselectedBg,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: borderC.withOpacity(0.5)),
+        ),
+        child: TabBar(
+          controller: _tabCtrl,
+          isScrollable: false,
+          labelPadding: EdgeInsets.zero,
+          indicatorSize: TabBarIndicatorSize.tab,
+          indicatorPadding: const EdgeInsets.symmetric(vertical: 2),
+          indicator: BoxDecoration(
+            color: AppColors.goldenBronze,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          dividerColor: Colors.transparent,
+          labelColor: Colors.white,
+          unselectedLabelColor: isDark ? AppColors.grey : AppColors.lightText,
+          labelStyle:
+              const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          unselectedLabelStyle:
+              const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+          tabs: const [
+            Tab(text: "حول"),
+            Tab(text: "عروض"),
+            Tab(text: "مميزة"),
+            Tab(text: "باقات"),
+            Tab(text: "كتيبات"),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ====================================================================
+  // HERO HEADER
   // ====================================================================
   Widget _buildHeroHeader(
       BuildContext ctx, bool isDark, Color textC, Color cardC) {
@@ -265,20 +271,41 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
 
     return Column(
       children: [
-        // ===== Cover + overlay buttons + logo =====
+        // Cover + overlay + logo
         SizedBox(
           height: coverH + logoR,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // Cover image
               Positioned.fill(
                 bottom: logoR,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(_coverUrl, fit: BoxFit.cover),
-                    // gradient overlay
+                    _coverUrl.isNotEmpty
+                        ? Image.network(_coverUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                                color: AppColors.goldenBronze.withOpacity(0.2),
+                                child: const Center(
+                                    child: Icon(Icons.store_rounded,
+                                        color: AppColors.goldenBronze,
+                                        size: 60))))
+                        : Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.deepNavy,
+                                  AppColors.goldenBronze.withOpacity(0.4)
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: const Center(
+                                child: Icon(Icons.store_rounded,
+                                    color: Colors.white38, size: 80)),
+                          ),
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -311,7 +338,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
                   ],
                 ),
               ),
-              // Circular Logo
+              // Logo
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -337,7 +364,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
                       radius: logoR - 4,
                       backgroundColor:
                           isDark ? AppColors.deepNavy : Colors.white,
-                      backgroundImage: NetworkImage(widget.storeLogo),
+                      backgroundImage: NetworkImage(_logoUrl),
                     ),
                   ),
                 ),
@@ -348,68 +375,74 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
 
         const SizedBox(height: 12),
 
-        // ===== Trust & Identity =====
+        // Name + badge
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(widget.storeName,
-                style: TextStyle(
-                    color: textC, fontSize: 22, fontWeight: FontWeight.w900)),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.all(2),
-              decoration: const BoxDecoration(
-                  color: Color(0xFF1DA1F2), shape: BoxShape.circle),
-              child: const Icon(Icons.check, color: Colors.white, size: 13),
+            Flexible(
+              child: Text(widget.storeName,
+                  style: TextStyle(
+                      color: textC, fontSize: 22, fontWeight: FontWeight.w900),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
             ),
+            const SizedBox(width: 6),
+            if (_isVerified)
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                    color: Color(0xFF1DA1F2), shape: BoxShape.circle),
+                child: const Icon(Icons.check, color: Colors.white, size: 13),
+              ),
           ],
         ),
         const SizedBox(height: 4),
-        Text(_category,
-            style: TextStyle(
-                color: textC.withOpacity(0.55),
-                fontSize: 13,
-                fontWeight: FontWeight.w600)),
+        if (_activityType.isNotEmpty)
+          Text(_activityLabel(_activityType),
+              style: TextStyle(
+                  color: textC.withOpacity(0.55),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
 
-        // Rating + Location row
+        // Rating + Location
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Rating chip
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color:
-                      AppColors.goldenBronze.withOpacity(isDark ? 0.18 : 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.star_rounded,
-                        color: AppColors.goldenBronze, size: 16),
-                    const SizedBox(width: 4),
-                    Text("$_rating",
-                        style: const TextStyle(
-                            color: AppColors.goldenBronze,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900)),
-                    const SizedBox(width: 3),
-                    Text("($_reviewsCount)",
-                        style: TextStyle(
-                            color: textC.withOpacity(0.4), fontSize: 11)),
-                  ],
+              GestureDetector(
+                onTap: () => _tabCtrl.animateTo(0),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color:
+                        AppColors.goldenBronze.withOpacity(isDark ? 0.18 : 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star_rounded,
+                          color: AppColors.goldenBronze, size: 16),
+                      const SizedBox(width: 4),
+                      Text(_rating > 0 ? _rating.toStringAsFixed(1) : "—",
+                          style: const TextStyle(
+                              color: AppColors.goldenBronze,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900)),
+                      const SizedBox(width: 3),
+                      Text("($_ratingCount)",
+                          style: TextStyle(
+                              color: textC.withOpacity(0.4), fontSize: 11)),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
-              // Location chip
-              GestureDetector(
-                onTap: () {},
-                child: Container(
+              if (_location.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -421,7 +454,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.location_on_rounded,
+                      const Icon(Icons.location_on_rounded,
                           color: AppColors.goldenBronze, size: 15),
                       const SizedBox(width: 4),
                       Text(_location,
@@ -432,152 +465,171 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
                     ],
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
-        // ===== Quick Stats =====
+        // Quick Stats
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.05)
-                      : Colors.white.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.08)
-                          : Colors.grey.shade200),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _stat("45K", "متابعين", textC),
-                    _vDiv(isDark),
-                    _stat("120", "عروض نشطة", textC),
-                    _vDiv(isDark),
-                    _stat("98%", "سرعة الرد", textC),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // ===== Action Buttons (Follow + Chat + Share) =====
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 40),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // Follow
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _isFollowing = !_isFollowing),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: _isFollowing
-                          ? Colors.transparent
-                          : AppColors.goldenBronze,
-                      borderRadius: BorderRadius.circular(14),
-                      border:
-                          Border.all(color: AppColors.goldenBronze, width: 2),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                            _isFollowing
-                                ? Icons.notifications_active_rounded
-                                : Icons.person_add_rounded,
-                            color: _isFollowing
-                                ? AppColors.goldenBronze
-                                : AppColors.deepNavy,
-                            size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          _isFollowing ? "متابَع ✓" : "متابعة",
-                          style: TextStyle(
-                              color: _isFollowing
-                                  ? AppColors.goldenBronze
-                                  : AppColors.deepNavy,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Chat
-              GestureDetector(
-                onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MerchantChatScreen(
-                          storeName: widget.storeName,
-                          storeLogo: widget.storeLogo,
-                          offerTitle: "استفسار عن المتجر"),
-                    )),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: cardC,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.goldenBronze),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.chat_bubble_outline_rounded,
-                          color: AppColors.goldenBronze, size: 18),
-                      SizedBox(width: 6),
-                      Text("دردشة",
-                          style: TextStyle(
-                              color: AppColors.goldenBronze,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Share circle
-              GestureDetector(
-                onTap: () =>
-                    Share.share('تصفح متجر ${widget.storeName} على SIDE'),
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: cardC,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                        color: isDark ? Colors.white12 : Colors.grey.shade300),
-                  ),
-                  child: Icon(Icons.share_rounded,
-                      color: textC.withOpacity(0.6), size: 20),
-                ),
-              ),
+              _statItem("$_followersCount", "متابع", textC, isDark),
+              _divider(textC),
+              _statItem("$_offersCount", "عرض", textC, isDark),
+              _divider(textC),
+              _statItem(_rating > 0 ? _rating.toStringAsFixed(1) : "—", "تقييم",
+                  textC, isDark),
             ],
           ),
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
+
+        // Action Buttons
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Consumer<SocialProvider>(
+            builder: (_, social, __) {
+              final isFollowing = social.isFollowing(widget.storeId);
+              return Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        if (!AuthGuard.requireAuth(context)) return;
+                        await social.toggleFollow(widget.storeId);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isFollowing
+                              ? Colors.transparent
+                              : AppColors.goldenBronze,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: AppColors.goldenBronze, width: 2),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                                isFollowing
+                                    ? Icons.notifications_active_rounded
+                                    : Icons.person_add_rounded,
+                                color: isFollowing
+                                    ? AppColors.goldenBronze
+                                    : AppColors.deepNavy,
+                                size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              isFollowing ? "متابَع ✓" : "متابعة",
+                              style: TextStyle(
+                                  color: isFollowing
+                                      ? AppColors.goldenBronze
+                                      : AppColors.deepNavy,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () {
+                      if (!AuthGuard.requireAuth(context)) return;
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MerchantChatScreen(
+                                storeName: widget.storeName,
+                                storeLogo: _logoUrl,
+                                offerTitle: "استفسار عن المتجر",
+                                receiverId: _storeOwnerId),
+                          ));
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: cardC,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.goldenBronze),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.chat_bubble_outline_rounded,
+                              color: AppColors.goldenBronze, size: 18),
+                          SizedBox(width: 6),
+                          Text("دردشة",
+                              style: TextStyle(
+                                  color: AppColors.goldenBronze,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () =>
+                        Share.share('تصفح متجر ${widget.storeName} على SIDE'),
+                    child: Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: cardC,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color:
+                                isDark ? Colors.white12 : Colors.grey.shade300),
+                      ),
+                      child: Icon(Icons.share_rounded,
+                          color: textC.withOpacity(0.6), size: 20),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(height: 12),
       ],
+    );
+  }
+
+  // ====================================================================
+  // Quick Stats helpers
+  // ====================================================================
+  Widget _statItem(String value, String label, Color textC, bool isDark) {
+    return Column(
+      children: [
+        Text(value,
+            style: TextStyle(
+                color: textC, fontSize: 18, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 2),
+        Text(label,
+            style: TextStyle(
+                color: textC.withOpacity(0.45),
+                fontSize: 11,
+                fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  Widget _divider(Color textC) {
+    return Container(
+      width: 1,
+      height: 28,
+      color: textC.withOpacity(0.12),
     );
   }
 
@@ -605,768 +657,890 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
     );
   }
 
-  Widget _stat(String val, String label, Color textC) {
-    return Column(children: [
-      Text(val,
-          style: const TextStyle(
-              color: AppColors.goldenBronze,
-              fontSize: 16,
-              fontWeight: FontWeight.w900)),
-      const SizedBox(height: 3),
-      Text(label,
-          style: TextStyle(
-              color: textC.withOpacity(0.5),
-              fontSize: 11,
-              fontWeight: FontWeight.w600)),
-    ]);
-  }
-
-  Widget _vDiv(bool isDark) => Container(
-      width: 1,
-      height: 28,
-      color: isDark ? Colors.white24 : Colors.grey.shade300);
-
   // ====================================================================
-  // تبويب العروض — Grid
+  // تبويب "حول المتجر" — تصميم Premium
   // ====================================================================
-  Widget _buildOffersTab(bool isDark, Color textC, Color cardC) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.68,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-      ),
-      itemCount: _offers.length,
-      itemBuilder: (context, i) {
-        final o = _offers[i];
-        return GestureDetector(
-          onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => OfferDetailsScreen(offerData: {
-                  ...o,
-                  "storeName": widget.storeName,
-                  "storeLogo": widget.storeLogo
-                }, offerType: OfferDetailType.standard),
-              )),
-          child: Container(
-            decoration: BoxDecoration(
-              color: cardC,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: isDark
-                      ? AppColors.goldenBronze.withOpacity(0.1)
-                      : Colors.grey.shade200),
-              boxShadow: [
-                if (!isDark)
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3)),
+  Widget _buildAboutTab(bool isDark, Color textC, Color cardC) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ▸ الوصف
+          if (_description.isNotEmpty) ...[
+            _aboutCard(
+              isDark: isDark,
+              textC: textC,
+              cardC: cardC,
+              icon: Icons.info_outline_rounded,
+              title: "عن المتجر",
+              child: Text(_description,
+                  style: TextStyle(
+                      color: textC.withOpacity(0.8),
+                      fontSize: 14,
+                      height: 1.7)),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // ▸ التواصل
+          _aboutCard(
+            isDark: isDark,
+            textC: textC,
+            cardC: cardC,
+            icon: Icons.contact_phone_rounded,
+            title: "بيانات التواصل",
+            child: Column(
+              children: [
+                if (_phone.isNotEmpty)
+                  _contactRow(Icons.phone_rounded, _phone, textC, isDark),
+                if (_email.isNotEmpty)
+                  _contactRow(Icons.email_rounded, _email, textC, isDark),
+                if (_location.isNotEmpty)
+                  _contactRow(
+                      Icons.location_on_rounded, _location, textC, isDark),
+                if (_phone.isEmpty && _email.isEmpty && _location.isEmpty)
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          color: textC.withOpacity(0.3), size: 16),
+                      const SizedBox(width: 8),
+                      Text("لا توجد بيانات تواصل متاحة",
+                          style: TextStyle(
+                              color: textC.withOpacity(0.4), fontSize: 13)),
+                    ],
+                  ),
               ],
             ),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                child: Stack(fit: StackFit.expand, children: [
-                  ClipRRect(
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(15)),
-                    child: Image.network(o["image"], fit: BoxFit.cover),
-                  ),
-                  if (o["discount"] != null)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                            color: Colors.red.shade600,
-                            borderRadius: BorderRadius.circular(8)),
-                        child: Text("-${o["discount"]}",
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                ]),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(o["title"],
-                          style: TextStyle(
-                              color: textC,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        Text(o["price"],
-                            style: const TextStyle(
-                                color: AppColors.goldenBronze,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900)),
-                        const SizedBox(width: 6),
-                        if (o["oldPrice"] != null)
-                          Text(o["oldPrice"],
-                              style: const TextStyle(
-                                  color: AppColors.grey,
-                                  fontSize: 10,
-                                  decoration: TextDecoration.lineThrough)),
-                      ]),
-                    ]),
-              ),
-            ]),
           ),
-        );
-      },
+          const SizedBox(height: 14),
+
+          // ▸ ساعات العمل
+          if (_workingHours.isNotEmpty) ...[
+            _aboutCard(
+              isDark: isDark,
+              textC: textC,
+              cardC: cardC,
+              icon: Icons.schedule_rounded,
+              title: "ساعات العمل",
+              child: Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4CAF50).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.circle, color: Color(0xFF4CAF50), size: 8),
+                        SizedBox(width: 6),
+                        Text("مفتوح",
+                            style: TextStyle(
+                                color: Color(0xFF4CAF50),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(_workingHours,
+                        style: TextStyle(
+                            color: textC.withOpacity(0.7),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // ▸ التقييمات والمراجعات
+          _buildRatingsSection(isDark, textC, cardC),
+        ],
+      ),
+    );
+  }
+
+  // ────── بطاقة About مخصصة ──────
+  Widget _aboutCard({
+    required bool isDark,
+    required Color textC,
+    required Color cardC,
+    required IconData icon,
+    required String title,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cardC,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? AppColors.goldenBronze.withOpacity(0.12)
+              : Colors.grey.shade200,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.15 : 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // عنوان مع أيقونة
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.goldenBronze.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: AppColors.goldenBronze, size: 17),
+              ),
+              const SizedBox(width: 10),
+              Text(title,
+                  style: TextStyle(
+                      color: textC, fontSize: 15, fontWeight: FontWeight.w800)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _contactRow(IconData icon, String text, Color textC, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppColors.goldenBronze.withOpacity(0.1)
+                  : AppColors.goldenBronze.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.goldenBronze, size: 17),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(
+                    color: textC.withOpacity(0.8),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500)),
+          ),
+        ],
+      ),
     );
   }
 
   // ====================================================================
-  // تبويب المجموعات — Bundled Offers
+  // قسم التقييمات — Premium Design
   // ====================================================================
-  Widget _buildGroupsTab(bool isDark, Color textC, Color cardC) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _groups.length,
-      itemBuilder: (_, i) {
-        final g = _groups[i];
-        final images = (g["images"] as List).cast<String>();
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
+  Widget _buildRatingsSection(bool isDark, Color textC, Color cardC) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // هيدر التقييمات
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.goldenBronze.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.star_rounded,
+                      color: AppColors.goldenBronze, size: 17),
+                ),
+                const SizedBox(width: 10),
+                Text("التقييمات",
+                    style: TextStyle(
+                        color: textC,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800)),
+              ],
+            ),
+            GestureDetector(
+              onTap: _hasRated
+                  ? null
+                  : () => _showRatingSheet(context, isDark, textC, cardC),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _hasRated
+                      ? (isDark
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.grey.shade200)
+                      : AppColors.goldenBronze,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                        _hasRated
+                            ? Icons.check_circle_rounded
+                            : Icons.edit_rounded,
+                        color:
+                            _hasRated ? AppColors.goldenBronze : Colors.white,
+                        size: 14),
+                    const SizedBox(width: 5),
+                    Text(_hasRated ? "تم التقييم ✓" : "أضف تقييمك",
+                        style: TextStyle(
+                            color: _hasRated
+                                ? AppColors.goldenBronze
+                                : Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // ملخص التقييم الكبير
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: cardC,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
                 color: isDark
-                    ? AppColors.goldenBronze.withOpacity(0.12)
+                    ? AppColors.goldenBronze.withOpacity(0.15)
                     : Colors.grey.shade200),
             boxShadow: [
-              if (!isDark)
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4)),
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.12 : 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Images collage
-            SizedBox(
-              height: 140,
-              child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(17)),
-                child: Row(
-                  children: [
-                    Expanded(
-                        flex: 2,
-                        child: Image.network(images[0],
-                            fit: BoxFit.cover, height: 140)),
-                    const SizedBox(width: 2),
-                    Expanded(
-                      child: Column(children: [
-                        Expanded(
-                            child: Image.network(
-                                images.length > 1 ? images[1] : images[0],
-                                fit: BoxFit.cover,
-                                width: double.infinity)),
-                        const SizedBox(height: 2),
-                        Expanded(
-                          child: Stack(fit: StackFit.expand, children: [
-                            Image.network(
-                                images.length > 2 ? images[2] : images[0],
-                                fit: BoxFit.cover),
-                            if (images.length > 3)
-                              Container(
-                                color: Colors.black45,
-                                child: Center(
-                                    child: Text("+${images.length - 3}",
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold))),
-                              ),
-                          ]),
-                        ),
-                      ]),
-                    ),
-                  ],
+          child: Row(
+            children: [
+              // الرقم الكبير
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.goldenBronze.withOpacity(0.15),
+                      AppColors.goldenBronze.withOpacity(0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    _rating > 0 ? _rating.toStringAsFixed(1) : "—",
+                    style: TextStyle(
+                        color: textC,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900),
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      children: [
-                        Expanded(
-                            child: Text(g["title"],
-                                style: TextStyle(
-                                    color: textC,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800))),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(8)),
-                          child: Text("-${g["discount"]}",
-                              style: TextStyle(
-                                  color: Colors.red.shade700,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                      ],
+                      children: List.generate(
+                          5,
+                          (i) => Icon(Icons.star_rounded,
+                              color: i < _rating.round()
+                                  ? AppColors.goldenBronze
+                                  : (isDark
+                                      ? Colors.white24
+                                      : Colors.grey.shade300),
+                              size: 20)),
                     ),
-                    const SizedBox(height: 8),
-                    // Items list
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: (g["items"] as List)
-                          .map<Widget>((item) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppColors.goldenBronze
-                                      .withOpacity(isDark ? 0.12 : 0.08),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(item,
-                                    style: TextStyle(
-                                        color: textC.withOpacity(0.7),
-                                        fontSize: 11)),
-                              ))
-                          .toList(),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Text(g["totalPrice"],
-                            style: const TextStyle(
-                                color: AppColors.goldenBronze,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900)),
-                        const SizedBox(width: 8),
-                        Text(g["oldTotal"],
-                            style: const TextStyle(
-                                color: AppColors.grey,
-                                fontSize: 12,
-                                decoration: TextDecoration.lineThrough)),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                              color: AppColors.goldenBronze,
-                              borderRadius: BorderRadius.circular(10)),
-                          child: Text("عرض الباقة",
-                              style: const TextStyle(
-                                  color: AppColors.deepNavy,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ]),
-            ),
-          ]),
-        );
-      },
-    );
-  }
-
-  // ====================================================================
-  // تبويب حول المتجر — About + Rating + Contact
-  // ====================================================================
-  Widget _buildAboutTab(bool isDark, Color textC, Color cardC) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        // ===== وصف المتجر =====
-        Text("عن المتجر",
-            style: TextStyle(
-                color: textC, fontSize: 16, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: cardC,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: isDark
-                    ? AppColors.goldenBronze.withOpacity(0.12)
-                    : Colors.grey.shade200),
-          ),
-          child: Text(
-            "متجر ${widget.storeName} هو وجهتك الأولى للحصول على أفضل المنتجات بأفضل الأسعار. نحن نضمن لك جودة المنتجات وسرعة في التجاوب وخدمة عملاء على مدار الساعة.",
-            style: TextStyle(
-                color: textC.withOpacity(0.7), fontSize: 13, height: 1.7),
+                    const SizedBox(height: 6),
+                    Text("$_ratingCount تقييم",
+                        style: TextStyle(
+                            color: textC.withOpacity(0.5),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 14),
 
-        // ===== تقييم المتجر =====
-        Text("تقييم المتجر",
-            style: TextStyle(
-                color: textC, fontSize: 16, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cardC,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.goldenBronze.withOpacity(0.2)),
-          ),
-          child: Column(children: [
-            Text("$_rating",
-                style: const TextStyle(
-                    color: AppColors.goldenBronze,
-                    fontSize: 42,
-                    fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                    5,
-                    (i) => Icon(
-                          i < _rating.floor()
-                              ? Icons.star_rounded
-                              : Icons.star_border_rounded,
-                          color: AppColors.goldenBronze,
-                          size: 24,
-                        ))),
-            const SizedBox(height: 6),
-            Text("$_reviewsCount تقييم",
-                style: TextStyle(color: textC.withOpacity(0.5), fontSize: 13)),
-          ]),
-        ),
-        const SizedBox(height: 12),
-        // Write review button
-        GestureDetector(
-          onTap: () => _showRatingSheet(context, isDark, textC, cardC),
-          child: Container(
+        // قائمة التقييمات
+        if (_loadingRatings)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(
+                child:
+                    CircularProgressIndicator(color: AppColors.goldenBronze)),
+          )
+        else if (_ratings.isEmpty)
+          Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.all(30),
             decoration: BoxDecoration(
-              color: AppColors.goldenBronze.withOpacity(isDark ? 0.15 : 0.1),
-              borderRadius: BorderRadius.circular(14),
-              border:
-                  Border.all(color: AppColors.goldenBronze.withOpacity(0.3)),
+              color: cardC,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                  color: isDark ? Colors.white10 : Colors.grey.shade200),
             ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Column(
               children: [
-                Icon(Icons.rate_review_rounded,
-                    color: AppColors.goldenBronze, size: 20),
-                SizedBox(width: 8),
-                Text("قيّم المتجر",
+                Icon(Icons.rate_review_outlined,
+                    color: textC.withOpacity(0.2), size: 40),
+                const SizedBox(height: 10),
+                Text("لا توجد تقييمات بعد",
+                    style:
+                        TextStyle(color: textC.withOpacity(0.4), fontSize: 14)),
+                const SizedBox(height: 4),
+                Text("كن أول من يقيّم هذا المتجر!",
                     style: TextStyle(
-                        color: AppColors.goldenBronze,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold)),
+                        color: AppColors.goldenBronze.withOpacity(0.7),
+                        fontSize: 12)),
               ],
             ),
-          ),
-        ),
-
-        const SizedBox(height: 24),
-
-        // ===== ساعات العمل =====
-        Text("ساعات العمل",
-            style: TextStyle(
-                color: textC, fontSize: 16, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: cardC,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: isDark
-                    ? AppColors.goldenBronze.withOpacity(0.12)
-                    : Colors.grey.shade200),
-          ),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.access_time_rounded,
-                  color: Colors.green, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text("مفتوح الآن",
-                      style: TextStyle(
-                          color: Colors.green.shade600,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13)),
-                  const SizedBox(height: 3),
-                  Text("من 8:00 صباحاً حتى 11:30 مساءً",
-                      style: TextStyle(
-                          color: textC.withOpacity(0.6), fontSize: 12)),
-                ])),
-          ]),
-        ),
-
-        const SizedBox(height: 24),
-
-        // ===== معلومات التواصل =====
-        Text("معلومات التواصل",
-            style: TextStyle(
-                color: textC, fontSize: 16, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 12),
-        ..._contactInfo.map((info) => Container(
+          )
+        else
+          ...List.generate(_ratings.length, (i) {
+            final r = _ratings[i];
+            final stars = (r['rating'] is int)
+                ? r['rating'] as int
+                : (double.tryParse(r['rating']?.toString() ?? '0')?.round() ??
+                    0);
+            final userName = r['user_name']?.toString() ??
+                r['reporter_name']?.toString() ??
+                'مستخدم';
+            return Container(
               margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: cardC,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                     color: isDark
-                        ? AppColors.goldenBronze.withOpacity(0.12)
+                        ? AppColors.goldenBronze.withOpacity(0.1)
                         : Colors.grey.shade200),
-              ),
-              child: Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                      color: AppColors.goldenBronze.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Icon(info["icon"],
-                      color: AppColors.goldenBronze, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(info["type"],
-                          style: TextStyle(
-                              color: textC.withOpacity(0.45), fontSize: 11)),
-                      const SizedBox(height: 2),
-                      Text(info["title"],
-                          style: TextStyle(
-                              color: textC,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold)),
-                    ])),
-                Icon(Icons.arrow_back_ios_new_rounded,
-                    color: AppColors.grey.withOpacity(0.5), size: 14),
-              ]),
-            )),
-
-        const SizedBox(height: 24),
-
-        // ===== موقع المتجر =====
-        Text("موقع المتجر",
-            style: TextStyle(
-                color: textC, fontSize: 16, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 12),
-        Container(
-          height: 160,
-          decoration: BoxDecoration(
-            color: cardC,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: isDark
-                    ? AppColors.goldenBronze.withOpacity(0.12)
-                    : Colors.grey.shade200),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: Stack(fit: StackFit.expand, children: [
-              Image.network(
-                "https://maps.googleapis.com/maps/api/staticmap?center=24.7136,46.6753&zoom=14&size=600x300&maptype=roadmap&key=placeholder",
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color:
-                      isDark ? const Color(0xFF0A2A35) : Colors.grey.shade200,
-                  child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.map_rounded,
-                            color: AppColors.goldenBronze.withOpacity(0.5),
-                            size: 40),
-                        const SizedBox(height: 8),
-                        Text(_location,
-                            style: TextStyle(
-                                color: textC.withOpacity(0.5), fontSize: 12)),
-                      ]),
-                ),
-              ),
-              Positioned(
-                bottom: 12,
-                left: 12,
-                right: 12,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.deepNavy.withOpacity(0.9)
-                        : Colors.white.withOpacity(0.95),
-                    borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.08 : 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
-                  child: Row(children: [
-                    const Icon(Icons.location_on_rounded,
-                        color: AppColors.goldenBronze, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: Text(_location,
-                            style: TextStyle(
-                                color: textC,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600))),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: AppColors.goldenBronze,
-                          borderRadius: BorderRadius.circular(8)),
-                      child: const Text("فتح الخريطة",
-                          style: TextStyle(
-                              color: AppColors.deepNavy,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold)),
-                    ),
-                  ]),
-                ),
+                ],
               ),
-            ]),
-          ),
-        ),
-        const SizedBox(height: 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor:
+                            AppColors.goldenBronze.withOpacity(0.1),
+                        child: Text(userName[0].toUpperCase(),
+                            style: const TextStyle(
+                                color: AppColors.goldenBronze,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(userName,
+                                style: TextStyle(
+                                    color: textC,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: List.generate(
+                                  5,
+                                  (j) => Padding(
+                                        padding: const EdgeInsets.only(left: 2),
+                                        child: Icon(Icons.star_rounded,
+                                            color: j < stars
+                                                ? AppColors.goldenBronze
+                                                : (isDark
+                                                    ? Colors.white24
+                                                    : Colors.grey.shade300),
+                                            size: 15),
+                                      )),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if ((r['comment']?.toString() ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.03)
+                            : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(r['comment'].toString(),
+                          style: TextStyle(
+                              color: textC.withOpacity(0.7),
+                              fontSize: 13,
+                              height: 1.5)),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
       ],
     );
   }
 
-  // ===== Rating bar helper =====
-  Widget _ratingBar(String label, double pct, Color textC, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(children: [
-        SizedBox(
-            width: 55,
-            child: Text(label,
-                style: TextStyle(color: textC.withOpacity(0.6), fontSize: 11))),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            height: 6,
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white10 : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: FractionallySizedBox(
-              alignment: AlignmentDirectional.centerStart,
-              widthFactor: pct,
-              child: Container(
-                decoration: BoxDecoration(
-                    color: AppColors.goldenBronze,
-                    borderRadius: BorderRadius.circular(3)),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-            width: 30,
-            child: Text("${(pct * 100).toInt()}%",
-                style: TextStyle(color: textC.withOpacity(0.5), fontSize: 10))),
-      ]),
-    );
-  }
-
   // ====================================================================
-  // شيت الابلاغ
-  // ====================================================================
-  void _showReportSheet(BuildContext ctx, bool isDark) {
-    final textC = isDark ? AppColors.pureWhite : AppColors.lightText;
-    final reports = [
-      {"icon": Icons.warning_amber_rounded, "title": "محتوى مضلل أو كاذب"},
-      {"icon": Icons.money_off_rounded, "title": "احتيال أو نصب"},
-      {"icon": Icons.block_rounded, "title": "محتوى غير لائق"},
-      {"icon": Icons.copy_rounded, "title": "انتحال هوية أو تقليد"},
-      {"icon": Icons.more_horiz_rounded, "title": "سبب آخر"},
-    ];
-
-    showModalBottomSheet(
-      context: ctx,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.deepNavy : AppColors.pureWhite,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(10))),
-          const SizedBox(height: 20),
-          Icon(Icons.flag_rounded, color: AppColors.error, size: 44),
-          const SizedBox(height: 12),
-          Text("الإبلاغ عن هذا المتجر",
-              style: TextStyle(
-                  color: textC, fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          Text("اختر سبب البلاغ ليتم مراجعته من فريق الإدارة",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.grey, fontSize: 13)),
-          const SizedBox(height: 20),
-          ...reports.map((r) => GestureDetector(
-                onTap: () => Navigator.pop(ctx),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.04)
-                        : Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: isDark ? Colors.white10 : Colors.grey.shade200),
-                  ),
-                  child: Row(children: [
-                    Icon(r["icon"] as IconData,
-                        color: AppColors.error.withOpacity(0.8), size: 22),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Text(r["title"] as String,
-                            style: TextStyle(
-                                color: textC,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600))),
-                    Icon(Icons.arrow_back_ios_new_rounded,
-                        color: AppColors.grey.withOpacity(0.4), size: 14),
-                  ]),
-                ),
-              )),
-          const SizedBox(height: 10),
-        ]),
-      ),
-    );
-  }
-
-  // ====================================================================
-  // نموذج تقييم بالنجوم
+  // نموذج التقييم (BottomSheet)
   // ====================================================================
   void _showRatingSheet(
       BuildContext ctx, bool isDark, Color textC, Color cardC) {
+    if (!AuthGuard.requireAuth(ctx)) return;
+
     int selectedStars = 0;
+    final commentCtrl = TextEditingController();
+    bool isSending = false;
+
     showModalBottomSheet(
       context: ctx,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => StatefulBuilder(
         builder: (context, setSheetState) => Directionality(
           textDirection: TextDirection.rtl,
           child: Container(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 20,
+                right: 20,
+                left: 20),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.deepNavy : AppColors.pureWhite,
+              color: isDark ? const Color(0xFF072A38) : Colors.white,
               borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(25)),
+                  const BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 20),
-              Text("قيّم المتجر",
-                  style: TextStyle(
-                      color: textC, fontSize: 20, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 8),
-              Text("كيف كانت تجربتك مع ${widget.storeName}؟",
-                  style:
-                      TextStyle(color: textC.withOpacity(0.5), fontSize: 13)),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                    5,
-                    (i) => GestureDetector(
-                          onTap: () =>
-                              setSheetState(() => selectedStars = i + 1),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Icon(
-                              i < selectedStars
-                                  ? Icons.star_rounded
-                                  : Icons.star_border_rounded,
-                              color: AppColors.goldenBronze,
-                              size: 44,
-                            ),
-                          ),
-                        )),
-              ),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (selectedStars > 0) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                      content: Text("شكراً لتقييمك! ($selectedStars نجوم) ✅"),
-                      backgroundColor: AppColors.goldenBronze,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ));
-                  }
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: selectedStars > 0
-                        ? AppColors.goldenBronze
-                        : AppColors.goldenBronze.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Center(
-                    child: Text("إرسال التقييم",
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold)),
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-            ]),
+                const SizedBox(height: 16),
+                Text("قيّم المتجر",
+                    style: TextStyle(
+                        color: textC,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Text("شاركنا تجربتك مع هذا المتجر",
+                    style:
+                        TextStyle(color: textC.withOpacity(0.4), fontSize: 13)),
+                const SizedBox(height: 16),
+                // Stars
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (i) {
+                    return GestureDetector(
+                      onTap: () => setSheetState(() => selectedStars = i + 1),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: AnimatedScale(
+                          scale: i < selectedStars ? 1.2 : 1.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(
+                            i < selectedStars
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            color: i < selectedStars
+                                ? AppColors.goldenBronze
+                                : AppColors.grey,
+                            size: 42,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 16),
+                // Stars label
+                if (selectedStars > 0)
+                  Text(
+                    [
+                      "",
+                      "ضعيف 😔",
+                      "مقبول 😐",
+                      "جيد 🙂",
+                      "ممتاز 😃",
+                      "رائع 🤩"
+                    ][selectedStars],
+                    style: TextStyle(
+                        color: AppColors.goldenBronze,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700),
+                  ),
+                const SizedBox(height: 14),
+                // Comment field
+                TextField(
+                  controller: commentCtrl,
+                  maxLines: 3,
+                  style: TextStyle(color: textC, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: "اكتب مراجعتك (اختياري)...",
+                    hintStyle:
+                        TextStyle(color: textC.withOpacity(0.3), fontSize: 13),
+                    filled: true,
+                    fillColor: isDark
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                          color:
+                              isDark ? Colors.white10 : Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                          color:
+                              isDark ? Colors.white10 : Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide:
+                          const BorderSide(color: AppColors.goldenBronze),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Submit
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: selectedStars > 0
+                          ? AppColors.goldenBronze
+                          : AppColors.grey,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      elevation: selectedStars > 0 ? 4 : 0,
+                      shadowColor: AppColors.goldenBronze.withOpacity(0.3),
+                    ),
+                    onPressed: selectedStars == 0 || isSending
+                        ? null
+                        : () async {
+                            setSheetState(() => isSending = true);
+                            try {
+                              await _api.post(ApiConstants.ratings, body: {
+                                'rating': selectedStars,
+                                'comment': commentCtrl.text.trim(),
+                                'store': int.parse(widget.storeId),
+                              });
+                              if (mounted) {
+                                Navigator.pop(context);
+                                _fetchRatings();
+                                _fetchStoreDetails();
+                                ScaffoldMessenger.of(this.context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("شكراً لتقييمك! ✨"),
+                                    backgroundColor: AppColors.goldenBronze,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setSheetState(() => isSending = false);
+                              if (mounted) {
+                                ScaffoldMessenger.of(this.context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("فشل إرسال التقييم"),
+                                    backgroundColor: AppColors.error,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    child: isSending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text("إرسال التقييم",
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  // ====================================================================
+  // بلاغ — مربوط بـ POST /social/reports/
+  // ====================================================================
+  void _showReportSheet(BuildContext ctx, bool isDark) {
+    if (!AuthGuard.requireAuth(ctx)) return;
+
+    final textC = isDark ? AppColors.pureWhite : AppColors.lightText;
+    String? selectedReason;
+    final descCtrl = TextEditingController();
+    bool isSending = false;
+
+    const reasons = {
+      "MISLEADING": "محتوى مضلل",
+      "SPAM": "إزعاج أو سبام",
+      "OFFENSIVE": "محتوى غير لائق",
+      "FRAUD": "احتيال أو نصب",
+      "INAPPROPRIATE": "سلوك غير مناسب",
+      "OTHER": "سبب آخر",
+    };
+
+    showModalBottomSheet(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheetState) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: Container(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 20,
+                right: 20,
+                left: 20),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF072A38) : Colors.white,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Icon(Icons.flag_rounded,
+                    color: AppColors.error, size: 32),
+                const SizedBox(height: 8),
+                Text("الإبلاغ عن المتجر",
+                    style: TextStyle(
+                        color: textC,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text("اختر سبب الإبلاغ",
+                    style:
+                        TextStyle(color: textC.withOpacity(0.4), fontSize: 13)),
+                const SizedBox(height: 16),
+                // Reason chips
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: reasons.entries.map((e) {
+                    final isActive = selectedReason == e.key;
+                    return GestureDetector(
+                      onTap: () => setSheetState(() => selectedReason = e.key),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? AppColors.error.withOpacity(0.12)
+                              : (isDark
+                                  ? Colors.white.withOpacity(0.05)
+                                  : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: isActive
+                                  ? AppColors.error
+                                  : Colors.transparent,
+                              width: 1.5),
+                        ),
+                        child: Text(e.value,
+                            style: TextStyle(
+                                color: isActive
+                                    ? AppColors.error
+                                    : textC.withOpacity(0.7),
+                                fontSize: 13,
+                                fontWeight: isActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w500)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+                // Description
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 2,
+                  style: TextStyle(color: textC, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: "تفاصيل إضافية (اختياري)...",
+                    hintStyle:
+                        TextStyle(color: textC.withOpacity(0.3), fontSize: 13),
+                    filled: true,
+                    fillColor: isDark
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                          color:
+                              isDark ? Colors.white10 : Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                          color:
+                              isDark ? Colors.white10 : Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.error),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Submit
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: selectedReason != null
+                          ? AppColors.error
+                          : AppColors.grey,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: selectedReason == null || isSending
+                        ? null
+                        : () async {
+                            setSheetState(() => isSending = true);
+                            try {
+                              await _api.post(ApiConstants.reports, body: {
+                                'report_type': 'STORE',
+                                'reason': selectedReason,
+                                'description': descCtrl.text.trim(),
+                                'store_id': int.parse(widget.storeId),
+                              });
+                              if (mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(this.context).showSnackBar(
+                                  const SnackBar(
+                                    content:
+                                        Text("تم إرسال البلاغ، شكراً لك 🙏"),
+                                    backgroundColor: AppColors.goldenBronze,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setSheetState(() => isSending = false);
+                              if (mounted) {
+                                ScaffoldMessenger.of(this.context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("فشل إرسال البلاغ"),
+                                    backgroundColor: AppColors.error,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    child: isSending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text("إرسال البلاغ",
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _activityLabel(String? type) {
+    switch (type) {
+      case 'RETAIL':
+        return 'تجزئة';
+      case 'SERVICE':
+        return 'خدمات';
+      case 'FOOD':
+        return 'مطاعم ومشروبات';
+      case 'OTHER':
+        return 'أخرى';
+      default:
+        return '';
+    }
   }
 }
 
@@ -1374,25 +1548,23 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
 // Sticky Tab Delegate
 // ============================================================================
 class _StickyTabDelegate extends SliverPersistentHeaderDelegate {
-  _StickyTabDelegate(this._tabBar, this.isDark);
-  final TabBar _tabBar;
+  final Widget child;
   final bool isDark;
+  static const double _height = 60;
+
+  _StickyTabDelegate(this.child, this.isDark);
 
   @override
-  double get minExtent => _tabBar.preferredSize.height + 10;
+  double get minExtent => _height;
   @override
-  double get maxExtent => _tabBar.preferredSize.height + 10;
+  double get maxExtent => _height;
 
   @override
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: isDark ? AppColors.deepNavy : AppColors.pureWhite,
-      padding: const EdgeInsets.only(top: 5, bottom: 5),
-      child: _tabBar,
-    );
+    return SizedBox.expand(child: child);
   }
 
   @override
-  bool shouldRebuild(_StickyTabDelegate old) => false;
+  bool shouldRebuild(_StickyTabDelegate old) => true;
 }

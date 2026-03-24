@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../data/providers/social_provider.dart';
+import '../helpers/auth_guard.dart';
 import '../theme/app_colors.dart';
 
 // ============================================================================
@@ -77,6 +78,7 @@ class _OfferActionButtonsState extends State<OfferActionButtons>
   }
 
   void _toggleLike() async {
+    if (!AuthGuard.requireAuth(context)) return;
     if (!_isValidId) {
       debugPrint('⚠️ offerId غير رقمي: "${widget.offerId}"');
       return;
@@ -98,6 +100,7 @@ class _OfferActionButtonsState extends State<OfferActionButtons>
   }
 
   void _toggleFavorite() async {
+    if (!AuthGuard.requireAuth(context)) return;
     if (!_isValidId) {
       debugPrint('⚠️ offerId غير رقمي: "${widget.offerId}"');
       return;

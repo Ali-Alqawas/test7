@@ -891,15 +891,21 @@ class _OffersScreenState extends State<OffersScreen> {
             String imageUrl = (images != null && images.isNotEmpty)
                 ? ApiConstants.resolveImageUrl(
                     images[0]['image_url']?.toString())
-                : ApiConstants.resolveImageUrl(product['image']?.toString());
+                : ApiConstants.resolveImageUrl(
+                    product['image_url']?.toString() ??
+                        product['image']?.toString());
 
             String storeName = product['store_name']?.toString() ?? 'متجر';
-            String storeLogo = product['store_logo'] != null
-                ? ApiConstants.resolveImageUrl(product['store_logo'].toString())
+            String storeLogo = (product['logo'] ?? product['store_logo']) !=
+                    null
+                ? ApiConstants.resolveImageUrl(
+                    (product['logo'] ?? product['store_logo']).toString())
                 : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
-            double price =
-                double.tryParse(product['price']?.toString() ?? '0') ?? 0;
+            double price = double.tryParse(product['new_price']?.toString() ??
+                    product['price']?.toString() ??
+                    '0') ??
+                0;
             double oldPrice =
                 double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
             String discount = '';

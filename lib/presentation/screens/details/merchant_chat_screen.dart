@@ -1,16 +1,25 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/network/api_constants.dart';
 
+// ============================================================================
+// شاشة الدردشة مع التاجر — مربوطة بـ /support/messages/
+// ============================================================================
 class MerchantChatScreen extends StatefulWidget {
   final String storeName;
   final String storeLogo;
   final String offerTitle;
+  final int? receiverId; // user ID لصاحب المتجر
 
   const MerchantChatScreen({
     super.key,
     required this.storeName,
     required this.storeLogo,
     required this.offerTitle,
+    this.receiverId,
   });
 
   @override
@@ -20,64 +29,107 @@ class MerchantChatScreen extends StatefulWidget {
 class _MerchantChatScreenState extends State<MerchantChatScreen> {
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ApiService _api = ApiService();
 
-  final List<Map<String, dynamic>> _messages = [];
-
-  // رسائل ترحيبية تلقائية من التاجر
-  static const List<String> _autoReplies = [
-    "أهلاً بك! كيف يمكنني مساعدتك؟ 😊",
-    "شكراً لتواصلك معنا، سنرد عليك في أقرب وقت",
-    "مرحباً! نسعد بخدمتك",
-  ];
+  List<Map<String, dynamic>> _messages = [];
+  bool _isLoading = true;
+  bool _isSending = false;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
-    // رسالة ترحيب تلقائية
-    Future.delayed(const Duration(milliseconds: 500), () {
+    _fetchMessages();
+    // تحديث الرسائل كل 5 ثوان
+    _pollTimer = Timer.periodic(
+        const Duration(seconds: 5), (_) => _fetchMessages(silent: true));
+  }
+
+  @override
+  void dispose() {
+    _msgController.dispose();
+    _scrollController.dispose();
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchMessages({bool silent = false}) async {
+    if (widget.receiverId == null) {
+      if (mounted && !silent) setState(() => _isLoading = false);
+      return;
+    }
+    try {
+      final data = await _api.get(
+        ApiConstants.directMessages,
+        queryParams: {'ordering': 'timestamp', 'page_size': '100'},
+      );
+      final List raw =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      // فلترة الرسائل للمحادثة مع هذا المستلم فقط
+      final filtered = raw
+          .cast<Map<String, dynamic>>()
+          .where((m) =>
+              m['sender'] == widget.receiverId ||
+              m['receiver'] == widget.receiverId)
+          .toList();
+
       if (mounted) {
+        final hadMessages = _messages.length;
         setState(() {
-          _messages.add({
-            "text":
-                "أهلاً بك في ${widget.storeName}! 👋\nكيف أقدر أساعدك بخصوص \"${widget.offerTitle}\"؟",
-            "isMe": false,
-            "time": _formatTime(),
-          });
+          _messages = filtered;
+          _isLoading = false;
         });
+        // تمرير تلقائي عند وصول رسائل جديدة
+        if (filtered.length > hadMessages) {
+          _scrollToBottom();
+        }
       }
-    });
+    } catch (e) {
+      debugPrint('خطأ جلب الرسائل: $e');
+      if (mounted && !silent) setState(() => _isLoading = false);
+    }
   }
 
-  String _formatTime() {
-    final now = DateTime.now();
-    final h = now.hour.toString().padLeft(2, '0');
-    final m = now.minute.toString().padLeft(2, '0');
-    return "$h:$m";
-  }
-
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || widget.receiverId == null || _isSending) return;
 
-    setState(() {
-      _messages.add({"text": text, "isMe": true, "time": _formatTime()});
-    });
+    setState(() => _isSending = true);
     _msgController.clear();
-    _scrollToBottom();
 
-    // رد تلقائي وهمي بعد لحظة
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
+    try {
+      final data = await _api.post(
+        ApiConstants.directMessages,
+        body: {
+          'receiver': widget.receiverId,
+          'text': text,
+        },
+      );
+
+      if (data is Map && mounted) {
         setState(() {
-          _messages.add({
-            "text": _autoReplies[_messages.length % _autoReplies.length],
-            "isMe": false,
-            "time": _formatTime(),
-          });
+          _messages.add(data.cast<String, dynamic>());
+          _isSending = false;
         });
         _scrollToBottom();
+        // تحديث الرسائل من السيرفر بعد ثانية لضمان الاستمرارية
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) _fetchMessages(silent: true);
+        });
       }
-    });
+    } catch (e) {
+      debugPrint('خطأ إرسال الرسالة: $e');
+      if (mounted) {
+        setState(() => _isSending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("فشل إرسال الرسالة"),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -92,11 +144,14 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _msgController.dispose();
-    _scrollController.dispose();
-    super.dispose();
+  String _formatTime(String? timestamp) {
+    if (timestamp == null) return '';
+    try {
+      final dt = DateTime.parse(timestamp).toLocal();
+      return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+    } catch (_) {
+      return '';
+    }
   }
 
   @override
@@ -107,42 +162,56 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: bg,
-        body: SafeArea(
-          child: Column(
-            children: [
-              // الهيدر
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: bg,
+          body: SafeArea(
+            child: Column(children: [
               _buildHeader(isDark, textC),
-              // الرسائل
               Expanded(
-                child: _messages.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.chat_bubble_outline_rounded,
-                                size: 50,
-                                color: AppColors.goldenBronze.withOpacity(0.3)),
-                            const SizedBox(height: 12),
-                            Text("ابدأ محادثتك مع التاجر",
-                                style: TextStyle(
-                                    color: AppColors.grey, fontSize: 14)),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                        itemCount: _messages.length,
-                        itemBuilder: (_, i) =>
-                            _buildBubble(_messages[i], isDark),
-                      ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.goldenBronze))
+                    : _messages.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.chat_bubble_outline_rounded,
+                                    size: 50,
+                                    color: AppColors.goldenBronze
+                                        .withOpacity(0.3)),
+                                const SizedBox(height: 12),
+                                Text(
+                                    widget.receiverId != null
+                                        ? "ابدأ محادثتك مع التاجر"
+                                        : "الدردشة غير متاحة حالياً",
+                                    style: TextStyle(
+                                        color: AppColors.grey, fontSize: 14)),
+                                if (widget.receiverId == null) ...[
+                                  const SizedBox(height: 6),
+                                  Text("لا يمكن تحديد صاحب المتجر",
+                                      style: TextStyle(
+                                          color:
+                                              AppColors.grey.withOpacity(0.6),
+                                          fontSize: 12)),
+                                ],
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            controller: _scrollController,
+                            physics: const BouncingScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                            itemCount: _messages.length,
+                            itemBuilder: (_, i) =>
+                                _buildBubble(_messages[i], isDark),
+                          ),
               ),
-              // حقل الإرسال
-              _buildInputBar(isDark, textC),
-            ],
+              if (widget.receiverId != null) _buildInputBar(isDark, textC),
+            ]),
           ),
         ),
       ),
@@ -194,27 +263,9 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.storeName,
-                    style: TextStyle(
-                        color: textC,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Row(children: [
-                  Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                          color: Color(0xFF4CAF50), shape: BoxShape.circle)),
-                  const SizedBox(width: 4),
-                  Text("متصل الآن",
-                      style: TextStyle(color: AppColors.grey, fontSize: 11)),
-                ]),
-              ],
-            ),
+            child: Text(widget.storeName,
+                style: TextStyle(
+                    color: textC, fontSize: 15, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -222,7 +273,8 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
   }
 
   Widget _buildBubble(Map<String, dynamic> msg, bool isDark) {
-    final bool isMe = msg["isMe"];
+    // الرسالة مني إذا أنا المرسل (sender != receiverId)
+    final bool isMe = msg["sender"] != widget.receiverId;
     final bubbleColor = isMe
         ? AppColors.goldenBronze
         : (isDark ? const Color(0xFF072A38) : AppColors.pureWhite);
@@ -262,12 +314,22 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(msg["text"],
+            // اسم المرسل للرسائل الواردة
+            if (!isMe)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(msg['sender_name']?.toString() ?? widget.storeName,
+                    style: TextStyle(
+                        color: AppColors.goldenBronze,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+              ),
+            Text(msg["text"]?.toString() ?? '',
                 style: TextStyle(color: txtColor, fontSize: 14, height: 1.5)),
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.bottomLeft,
-              child: Text(msg["time"],
+              child: Text(_formatTime(msg["timestamp"]?.toString()),
                   style: TextStyle(color: timeColor, fontSize: 10)),
             ),
           ],
@@ -319,12 +381,14 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: _sendMessage,
+            onTap: _isSending ? null : _sendMessage,
             child: Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.goldenBronze,
+                color: _isSending
+                    ? AppColors.goldenBronze.withOpacity(0.5)
+                    : AppColors.goldenBronze,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
@@ -333,8 +397,15 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
                       offset: const Offset(0, 3))
                 ],
               ),
-              child:
-                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              child: _isSending
+                  ? const Center(
+                      child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2)))
+                  : const Icon(Icons.send_rounded,
+                      color: Colors.white, size: 20),
             ),
           ),
         ],

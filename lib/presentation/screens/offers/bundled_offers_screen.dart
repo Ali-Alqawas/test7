@@ -561,14 +561,17 @@ class _BundledOffersScreenState extends State<BundledOffersScreen> {
 
             // 1. استخراج اسم المتجر
             String storeName = b['store_name']?.toString().trim() ?? '';
-            String storeLogo = b['store_logo']?.toString() ?? '';
+            String storeLogo =
+                b['logo']?.toString() ?? b['store_logo']?.toString() ?? '';
 
             if (storeName.isEmpty &&
                 b['products'] != null &&
                 (b['products'] as List).isNotEmpty) {
               storeName =
                   b['products'][0]['store_name']?.toString().trim() ?? 'متجر';
-              storeLogo = products[0]['store_logo']?.toString() ?? '';
+              storeLogo = products[0]['logo']?.toString() ??
+                  products[0]['store_logo']?.toString() ??
+                  '';
             }
             if (storeName.isEmpty || storeName == 'null') storeName = 'متجر';
 

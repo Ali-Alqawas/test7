@@ -331,7 +331,6 @@ class AuthProvider extends ChangeNotifier {
         body: {
           'old_password': oldPassword,
           'new_password': newPassword,
-          'new_password2': confirmNewPassword,
         },
       );
       return true;

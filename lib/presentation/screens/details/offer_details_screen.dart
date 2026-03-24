@@ -5,7 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/network/api_constants.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/widgets/offer_action_buttons.dart';
-import '../../../data/providers/auth_provider.dart';
+import '../../../core/helpers/auth_guard.dart';
 import '../../../data/providers/social_provider.dart';
 import 'all_comments_screen.dart';
 import 'merchant_chat_screen.dart';
@@ -45,6 +45,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
   late String _title;
   late String _storeName;
   late String _storeLogo;
+  late String _storeId;
   late String _price;
   late String _oldPrice;
   late String _discount;
@@ -97,10 +98,17 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
             "متجر")
         .toString();
     _storeLogo = ApiConstants.resolveImageUrl(
-        (d["storeLogo"] ?? d["store_logo"] ?? raw["store_logo"] ?? d["logo"])
+        (d["storeLogo"] ??
+                d["logo"] ??
+                d["store_logo"] ??
+                raw["logo"] ??
+                raw["store_logo"])
             ?.toString(),
         fallback: "https://i.pravatar.cc/150?img=11");
-    _price = (d["price"] ?? raw["price"] ?? "").toString();
+    _storeId =
+        (d["storeId"] ?? d["store_id"] ?? raw["store_id"] ?? raw["store"] ?? "")
+            .toString();
+    _price = (d["price"] ?? raw["new_price"] ?? raw["price"] ?? "").toString();
     if (!_price.contains('\$') && _price.isNotEmpty) _price = '$_price\$';
     _oldPrice =
         (d["oldPrice"] ?? d["old_price"] ?? raw["old_price"] ?? "").toString();
@@ -166,41 +174,60 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
     // محتويات الباقة — من products في original_data أو البيانات المباشرة
     _bundleItems = [];
     if (_isBundled) {
-      final products = (raw["products"] is List)
-          ? raw["products"] as List
-          : (d["products"] is List ? d["products"] as List : []);
+      final products = (raw["group_items"] is List)
+          ? raw["group_items"] as List
+          : (raw["items"] is List
+              ? raw["items"] as List
+              : (raw["products"] is List
+                  ? raw["products"] as List
+                  : (d["products"] is List ? d["products"] as List : [])));
       for (var p in products) {
+        // group_items may nest the product inside a 'product' key
+        final prod = (p is Map && p['product'] is Map) ? p['product'] : p;
         _bundleItems.add({
-          "name": (p["title"] ?? p["name"] ?? "منتج").toString(),
+          "name": (prod["title"] ?? prod["name"] ?? "منتج").toString(),
           "image": _extractImageUrl(
-              p["images"] is List && (p["images"] as List).isNotEmpty
-                  ? p["images"][0]
-                  : p["image"]),
-          "price": "${p['price'] ?? '0'}\$",
+              prod["images"] is List && (prod["images"] as List).isNotEmpty
+                  ? prod["images"][0]
+                  : prod["image"]),
+          "price": "${prod['new_price'] ?? prod['price'] ?? '0'}\$",
           "isLocal": false,
         });
       }
     }
-    // جلب التعليقات — فقط للمنتجات الفردية (ليس الباقات)
-    if (!_isBundled) {
-      _fetchComments();
-    }
-    // جلب بيانات المنتج المحدّثة + تسجيل مشاهدة + جلب مشابهة
-    if (!_isBundled && !_isBrochure && _productId.isNotEmpty) {
+    // جلب التعليقات (للمنتجات والباقات)
+    _fetchComments();
+    // جلب بيانات محدّثة + تسجيل مشاهدة + جلب مشابهة
+    if (!_isBrochure && _productId.isNotEmpty) {
       _fetchProductDetails();
       _trackView();
+    }
+    // جلب عروض مشابهة دائماً (حتى للباقات)
+    if (_categoryId > 0) {
+      _fetchSimilarOffers();
     }
   }
 
   Future<void> _fetchComments() async {
+    if (_productId.isEmpty) return;
     setState(() => _loadingComments = true);
-    final auth = context.read<AuthProvider>();
-    final comments = await auth.fetchProductComments(_productId);
-    if (mounted) {
-      setState(() {
-        _comments = comments;
-        _loadingComments = false;
-      });
+    try {
+      final api = ApiService();
+      final endpoint = _isBundled
+          ? ApiConstants.groupComments(_productId)
+          : ApiConstants.productComments(_productId);
+      final data = await api.get(endpoint);
+      final List raw =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+      if (mounted) {
+        setState(() {
+          _comments = raw.cast<Map<String, dynamic>>();
+          _loadingComments = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ جلب التعليقات: $e');
+      if (mounted) setState(() => _loadingComments = false);
     }
   }
 
@@ -340,23 +367,31 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
   }
 
   Future<void> _submitComment() async {
+    if (!AuthGuard.requireAuth(context)) return;
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
-    final productIdInt = int.tryParse(_productId);
-    if (productIdInt == null) return;
+    if (_productId.isEmpty) return;
 
     setState(() => _isSending = true);
     FocusScope.of(context).unfocus();
 
-    final auth = context.read<AuthProvider>();
-    final result = await auth.addComment(productId: productIdInt, text: text);
+    try {
+      final api = ApiService();
+      final endpoint = _isBundled
+          ? ApiConstants.groupComments(_productId)
+          : ApiConstants.productComments(_productId);
+      final result = await api.post(endpoint, body: {'text': text});
 
-    if (mounted) {
-      setState(() => _isSending = false);
-      if (result != null) {
-        _commentController.clear();
-        _fetchComments();
-      } else {
+      if (mounted) {
+        setState(() => _isSending = false);
+        if (result != null) {
+          _commentController.clear();
+          _fetchComments();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("فشل إرسال التعليق",
@@ -571,20 +606,21 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
           if (!_isBundled && !_isBrochure && _hasSpecs)
             const SizedBox(height: 16),
 
-          // ======== محتويات الباقة (للمجمعة فقط) ========
-          if (_isBundled) _buildBundleContents(isDark, textC, cardBg),
+          // ======== الإثبات الاجتماعي ========
+          _buildSocialProof(isDark, textC, cardBg),
+          const SizedBox(height: 16),
 
-          // ======== الإثبات الاجتماعي (ليس للباقات) ========
-          if (!_isBundled) ...[
-            _buildSocialProof(isDark, textC, cardBg),
+          // ======== محتويات الباقة (للمجمعة فقط — قبل التعليقات) ========
+          if (_isBundled) ...[
+            _buildBundleContents(isDark, textC, cardBg),
             const SizedBox(height: 16),
           ],
 
-          // ======== التعليقات (ليس للباقات) ========
-          if (!_isBundled) _buildCommentsPreview(isDark, textC, cardBg),
+          // ======== التعليقات ========
+          _buildCommentsPreview(isDark, textC, cardBg),
 
-          // ======== عروض مشابهة (فقط عادية ومميزة) ========
-          if (!_isBundled && !_isBrochure) ...[
+          // ======== عروض مشابهة ========
+          if (!_isBrochure) ...[
             const SizedBox(height: 20),
             _buildSimilarOffers(isDark, textC),
           ],
@@ -611,7 +647,9 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                   context,
                   MaterialPageRoute(
                       builder: (_) => MerchantProfileScreen(
-                          storeName: _storeName, storeLogo: _storeLogo))),
+                          storeId: _storeId,
+                          storeName: _storeName,
+                          storeLogo: _storeLogo))),
               child: Row(children: [
                 Container(
                     padding: const EdgeInsets.all(2),
@@ -665,7 +703,9 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                   context,
                   MaterialPageRoute(
                       builder: (_) => MerchantProfileScreen(
-                          storeName: _storeName, storeLogo: _storeLogo))),
+                          storeId: _storeId,
+                          storeName: _storeName,
+                          storeLogo: _storeLogo))),
               child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -786,6 +826,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
           _actionBtn(Icons.share_rounded, "مشاركة", isDark, textC,
               () => Share.share('تصفح العرض: $_title على SIDE')),
           _actionBtn(Icons.chat_rounded, "تواصل", isDark, textC, () {
+            if (!AuthGuard.requireAuth(context)) return;
             Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -794,8 +835,10 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                         storeLogo: _storeLogo,
                         offerTitle: _title)));
           }),
-          _actionBtn(Icons.support_agent_rounded, "الدعم", isDark, textC,
-              () => _showSupportSheet(isDark)),
+          _actionBtn(Icons.support_agent_rounded, "الدعم", isDark, textC, () {
+            if (!AuthGuard.requireAuth(context)) return;
+            _showSupportSheet(isDark);
+          }),
         ]));
   }
 
@@ -955,7 +998,9 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
   Widget _buildSocialProof(bool isDark, Color textC, Color cardBg) {
     return Consumer<SocialProvider>(
       builder: (_, social, __) {
-        final userLiked = social.isLiked(_productId);
+        final userLiked = _isBundled
+            ? social.isGroupLiked(_productId)
+            : social.isLiked(_productId);
         final displayLikes = _likesCount + (userLiked ? 1 : 0);
         return GestureDetector(
           onTap: _refreshCounts,
@@ -1296,7 +1341,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
               final cardBg =
                   isDark ? const Color(0xFF072A38) : AppColors.pureWhite;
               final title = (o["title"] ?? "عرض").toString();
-              final price = (o["price"] ?? "0").toString();
+              final price = (o["new_price"] ?? o["price"] ?? "0").toString();
               final storeName = (o["store_name"] ?? "متجر").toString();
               String imageUrl =
                   'https://placehold.co/200x200/png?text=No+Image';
@@ -1309,7 +1354,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
 
               return GestureDetector(
                 onTap: () {
-                  Navigator.pushReplacement(
+                  Navigator.push(
                       context,
                       MaterialPageRoute(
                           builder: (_) => OfferDetailsScreen(
@@ -1503,12 +1548,12 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
     final ctrl = TextEditingController();
     final bg = isDark ? const Color(0xFF072A38) : AppColors.pureWhite;
     final textC = isDark ? AppColors.pureWhite : AppColors.lightText;
-    String selectedType = 'general';
+    String selectedType = 'GENERAL';
     final types = {
-      'general': 'استفسار عام',
-      'complaint': 'شكوى',
-      'suggestion': 'اقتراح',
-      'other': 'أخرى',
+      'GENERAL': 'استفسار عام',
+      'TECHNICAL': 'مشكلة تقنية',
+      'BILLING': 'مشكلة في الفوترة',
+      'OTHER': 'أخرى',
     };
     showDialog(
       context: context,

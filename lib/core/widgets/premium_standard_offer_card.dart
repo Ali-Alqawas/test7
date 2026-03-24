@@ -256,11 +256,13 @@ import '../../presentation/screens/details/merchant_profile_screen.dart';
 class PremiumStandardOffersSection extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback? onSeeAllTap;
+  final String? storeId;
 
   const PremiumStandardOffersSection({
     super.key,
     required this.isDarkMode,
     this.onSeeAllTap,
+    this.storeId,
   });
 
   @override
@@ -284,9 +286,11 @@ class _PremiumStandardOffersSectionState
   // جلب العروض عبر ApiService
   Future<void> _fetchOffers() async {
     try {
+      final params = <String, String>{'page_size': '10'};
+      if (widget.storeId != null) params['store'] = widget.storeId!;
       final data = await _api.get(
         ApiConstants.products,
-        queryParams: {'page_size': '10'},
+        queryParams: params,
         requiresAuth: false,
       );
 
@@ -305,22 +309,28 @@ class _PremiumStandardOffersSectionState
             // صورة المنتج المباشرة (بعض APIs ترسلها كحقل مباشر)
             if (images == null || images.isEmpty) {
               imageUrl = ApiConstants.resolveImageUrl(
-                apiOffer['image']?.toString() ??
+                apiOffer['image_url']?.toString() ??
+                    apiOffer['image']?.toString() ??
                     apiOffer['thumbnail']?.toString(),
               );
             }
 
             String storeName = apiOffer['store_name'] ?? 'متجر غير معروف';
-            String storeLogo =
-                'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=random&color=fff';
+            String storeLogo = (apiOffer['logo'] ?? apiOffer['store_logo']) !=
+                    null
+                ? ApiConstants.resolveImageUrl(
+                    (apiOffer['logo'] ?? apiOffer['store_logo']).toString())
+                : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
             return {
               "id": (apiOffer['product_id'] ?? apiOffer['id'] ?? '').toString(),
               "title": apiOffer['title'] ?? 'بدون عنوان',
               "storeName": storeName,
+              "storeId":
+                  (apiOffer["store"] ?? apiOffer["store_id"] ?? "").toString(),
               "storeLogo": storeLogo,
               "image": imageUrl,
-              "price": "${apiOffer['price'] ?? '0'}\$",
+              "price": "${apiOffer['new_price'] ?? apiOffer['price'] ?? '0'}\$",
               "oldPrice": apiOffer['old_price'] != null
                   ? "${apiOffer['old_price']}\$"
                   : "",
@@ -470,6 +480,8 @@ class _PremiumStandardOffersSectionState
                                 context,
                                 MaterialPageRoute(
                                     builder: (_) => MerchantProfileScreen(
+                                        storeId:
+                                            (offer["storeId"] ?? '').toString(),
                                         storeName: offer["storeName"],
                                         storeLogo: offer["storeLogo"]))),
                             child: CircleAvatar(
@@ -494,6 +506,8 @@ class _PremiumStandardOffersSectionState
                             MaterialPageRoute(
                                 builder: (_) => MerchantProfileScreen(
                                     storeName: offer["storeName"],
+                                    storeId:
+                                        (offer["storeId"] ?? '').toString(),
                                     storeLogo: offer["storeLogo"]))),
                         child: Text(offer["storeName"],
                             style: const TextStyle(

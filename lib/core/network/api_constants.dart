@@ -6,10 +6,10 @@ class ApiConstants {
   // ⚠️ تنبيه: غيّر الـ IP حسب جهازك (السيرفر يعمل محلياً)
   // لينكس/ماك: ifconfig | grep inet
   // ويندوز: ipconfig
-  static const String baseUrl = 'http://192.168.1.103:8000/api/v1';
+  static const String baseUrl = 'http://192.168.1.103:8001/api/v1';
 
   /// عنوان السيرفر الأساسي (بدون /api/v1) — لتركيب روابط الصور
-  static const String mediaBaseUrl = 'http://192.168.1.103:8000';
+  static const String mediaBaseUrl = 'http://192.168.1.103:8001';
 
   /// تحويل رابط الصورة إلى رابط كامل قابل للتحميل
   /// يعالج كل الحالات:
@@ -27,7 +27,11 @@ class ApiConstants {
       // استبدال localhost بالـ IP الحقيقي
       return url
           .replaceAll('http://localhost:8000', mediaBaseUrl)
-          .replaceAll('http://127.0.0.1:8000', mediaBaseUrl);
+          .replaceAll('http://127.0.0.1:8000', mediaBaseUrl)
+          .replaceAll('http://localhost:8001', mediaBaseUrl)
+          .replaceAll('http://127.0.0.1:8001', mediaBaseUrl)
+          .replaceAll('http://10.0.2.2:8000', mediaBaseUrl)
+          .replaceAll('http://10.0.2.2:8001', mediaBaseUrl);
     }
 
     // مسار نسبي → إضافة عنوان السيرفر
@@ -114,6 +118,8 @@ class ApiConstants {
   static String followStore(String storeId) =>
       '/social/stores/$storeId/follow/';
   static String rateStore(String storeId) => '/social/stores/$storeId/rate/';
+  static const String follows = '/social/follows/';
+  static String deleteFollow(int recordId) => '/social/follows/$recordId/';
 
   // ──────────────────────────────────────────────────────────────
   // 💬 Social | Comments
@@ -122,6 +128,8 @@ class ApiConstants {
   static String deleteComment(int commentId) => '/social/comments/$commentId/';
   static String productComments(String productId) =>
       '/social/products/$productId/comments/';
+  static String groupComments(String groupId) =>
+      '/social/groups/$groupId/comments/';
 
   // ──────────────────────────────────────────────────────────────
   // ⭐ Social | Reviews & Ratings

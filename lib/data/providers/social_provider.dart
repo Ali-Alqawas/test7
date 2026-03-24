@@ -220,12 +220,60 @@ class SocialProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // ── المتابعات: storeId → followRecordId ──
+  final Map<String, int> _followRecords = {};
+
+  bool isFollowing(String storeId) => _followRecords.containsKey(storeId);
+
+  Future<void> loadFollows() async {
+    try {
+      final data = await _api.get('/social/follows/');
+      final List raw =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+      _followRecords.clear();
+      for (final item in raw) {
+        final storeId = item['store']?.toString();
+        final recordId = item['id'] as int?;
+        if (storeId != null && recordId != null) {
+          _followRecords[storeId] = recordId;
+        }
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('خطأ جلب المتابعات: $e');
+    }
+  }
+
+  Future<bool> toggleFollow(String storeId) async {
+    try {
+      if (_followRecords.containsKey(storeId)) {
+        // إلغاء المتابعة
+        final recordId = _followRecords[storeId]!;
+        await _api.delete('/social/follows/$recordId/');
+        _followRecords.remove(storeId);
+      } else {
+        // متابعة
+        final data = await _api
+            .post('/social/follows/', body: {'store': int.parse(storeId)});
+        if (data is Map && data['id'] != null) {
+          _followRecords[storeId] = data['id'] as int;
+        }
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('خطأ المتابعة: $e');
+      return false;
+    }
+  }
+
   // مسح كل البيانات (عند تسجيل الخروج)
   void clear() {
     _favoriteRecords.clear();
     _likeRecords.clear();
     _groupFavoriteRecords.clear();
     _groupLikeRecords.clear();
+    _followRecords.clear();
     notifyListeners();
   }
 }

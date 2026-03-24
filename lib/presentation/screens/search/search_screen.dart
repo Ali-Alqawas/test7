@@ -249,15 +249,19 @@ class _SearchScreenState extends State<SearchScreen> {
         ? ApiConstants.resolveImageUrl(images[0] is Map
             ? images[0]['image_url']?.toString()
             : images[0]?.toString())
-        : ApiConstants.resolveImageUrl(
-            p['image']?.toString() ?? p['thumbnail']?.toString());
+        : ApiConstants.resolveImageUrl(p['image_url']?.toString() ??
+            p['image']?.toString() ??
+            p['thumbnail']?.toString());
 
     String storeName = (p['store_name'] ?? p['store'] ?? 'متجر').toString();
-    String storeLogo = p['store_logo'] != null
-        ? ApiConstants.resolveImageUrl(p['store_logo'].toString())
-        : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=random&color=fff';
+    String storeLogo = (p['logo'] ?? p['store_logo']) != null
+        ? ApiConstants.resolveImageUrl(
+            (p['logo'] ?? p['store_logo']).toString())
+        : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
-    double price = double.tryParse(p['price']?.toString() ?? '0') ?? 0;
+    double price = double.tryParse(
+            p['new_price']?.toString() ?? p['price']?.toString() ?? '0') ??
+        0;
     double oldPrice = double.tryParse(p['old_price']?.toString() ?? '0') ?? 0;
 
     return {
@@ -320,8 +324,9 @@ class _SearchScreenState extends State<SearchScreen> {
       "title": b['name']?.toString() ?? 'باقة',
       "store": storeName,
       "storeName": storeName,
-      "storeLogo": b['store_logo'] != null
-          ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
+      "storeLogo": (b['logo'] ?? b['store_logo']) != null
+          ? ApiConstants.resolveImageUrl(
+              (b['logo'] ?? b['store_logo']).toString())
           : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff',
       "price": bundlePrice > 0 ? "${bundlePrice.toInt()}\$" : "0\$",
       "oldPrice": displayOldPrice > 0 ? "${displayOldPrice.toInt()}\$" : "",
@@ -749,8 +754,10 @@ class _SearchScreenState extends State<SearchScreen> {
       onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                MerchantProfileScreen(storeName: name, storeLogo: logo),
+            builder: (_) => MerchantProfileScreen(
+                storeId: (store["store_id"] ?? store["id"] ?? "").toString(),
+                storeName: name,
+                storeLogo: logo),
           )),
       child: Container(
         width: 220,
@@ -1016,6 +1023,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => MerchantProfileScreen(
+                                  storeId: (offer["storeId"] ?? "").toString(),
                                   storeName: offer["storeName"],
                                   storeLogo: offer["storeLogo"]),
                             )),
@@ -1055,6 +1063,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           MaterialPageRoute(
                             builder: (_) => MerchantProfileScreen(
                                 storeName: offer["storeName"],
+                                storeId: (offer["storeId"] ?? "").toString(),
                                 storeLogo: offer["storeLogo"]),
                           )),
                       child: Text(offer["storeName"],

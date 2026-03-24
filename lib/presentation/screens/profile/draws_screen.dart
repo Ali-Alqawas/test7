@@ -14,6 +14,7 @@ class DrawsScreen extends StatefulWidget {
 class _DrawsScreenState extends State<DrawsScreen> {
   List<Map<String, dynamic>> _draws = [];
   bool _loading = true;
+  final Set<String> _enteredDrawIds = {};
 
   @override
   void initState() {
@@ -85,6 +86,7 @@ class _DrawsScreenState extends State<DrawsScreen> {
     if (!mounted) return;
 
     if (success) {
+      _enteredDrawIds.add(id);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text("تم تسجيلك في السحب بنجاح 🎉"),
         backgroundColor: AppColors.goldenBronze,
@@ -213,7 +215,8 @@ class _DrawsScreenState extends State<DrawsScreen> {
     final entriesCount = d['entries_count'] ?? 0;
     final status = (d['status'] ?? 'ACTIVE').toString();
     final sInfo = _statusInfo(status);
-    final bool canEnter = sInfo['canEnter'] == true;
+    final bool canEnter = sInfo['canEnter'] == true &&
+        !_enteredDrawIds.contains((d['draw_id'] ?? d['id'] ?? '').toString());
     final remaining = _timeRemaining(endDate.toString());
 
     return GestureDetector(
@@ -318,6 +321,28 @@ class _DrawsScreenState extends State<DrawsScreen> {
                     child: const Text("دخول السحب 🎉",
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 14)),
+                  ),
+                ),
+              ],
+              if (sInfo['canEnter'] == true &&
+                  _enteredDrawIds.contains(
+                      (d['draw_id'] ?? d['id'] ?? '').toString())) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Text("تم التسجيل ✓",
+                          style: TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14)),
+                    ),
                   ),
                 ),
               ],

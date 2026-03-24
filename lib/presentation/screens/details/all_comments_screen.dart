@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/network/api_constants.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/helpers/auth_guard.dart';
 import '../../../data/providers/auth_provider.dart';
 
 class AllCommentsScreen extends StatefulWidget {
@@ -44,13 +46,24 @@ class _AllCommentsScreenState extends State<AllCommentsScreen> {
   // جلب التعليقات
   // ──────────────────────────────────────────────
   Future<void> _fetchComments() async {
-    final auth = context.read<AuthProvider>();
-    final comments = await auth.fetchProductComments(widget.productId);
-    if (mounted) {
-      setState(() {
-        _comments = comments;
-        _isLoading = false;
-      });
+    try {
+      final api = ApiService();
+      final endpoint = widget.isGroup
+          ? ApiConstants.groupComments(widget.productId)
+          : ApiConstants.productComments(widget.productId);
+      final data = await api.get(endpoint);
+      final List raw =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+      if (mounted) {
+        setState(() {
+          _comments = raw.cast<Map<String, dynamic>>();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint(
+          '\u062e\u0637\u0623 \u062c\u0644\u0628 \u0627\u0644\u062a\u0639\u0644\u064a\u0642\u0627\u062a: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -58,32 +71,40 @@ class _AllCommentsScreenState extends State<AllCommentsScreen> {
   // إرسال تعليق جديد
   // ──────────────────────────────────────────────
   Future<void> _submitComment() async {
+    if (!AuthGuard.requireAuth(context)) return;
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
 
-    final productIdInt = int.tryParse(widget.productId);
-    if (productIdInt == null) return;
-
     setState(() => _isSending = true);
-    final auth = context.read<AuthProvider>();
-    final result = await auth.addComment(productId: productIdInt, text: text);
+    try {
+      final api = ApiService();
+      final endpoint = widget.isGroup
+          ? ApiConstants.groupComments(widget.productId)
+          : ApiConstants.productComments(widget.productId);
+      final result = await api.post(endpoint, body: {'text': text});
 
-    if (mounted) {
-      setState(() => _isSending = false);
-      if (result != null) {
-        _commentController.clear();
-        _fetchComments(); // إعادة جلب التعليقات
+      if (mounted) {
+        setState(() => _isSending = false);
+        if (result != null) {
+          _commentController.clear();
+          _fetchComments();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  "\u062a\u0645 \u0625\u0636\u0627\u0641\u0629 \u062a\u0639\u0644\u064a\u0642\u0643 \u2705",
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              backgroundColor: Color(0xFF4CAF50),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("تم إضافة تعليقك ✅",
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            backgroundColor: Color(0xFF4CAF50),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("فشل إرسال التعليق",
+            content: Text(
+                "\u0641\u0634\u0644 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062a\u0639\u0644\u064a\u0642",
                 style: TextStyle(fontWeight: FontWeight.w600)),
             backgroundColor: AppColors.error,
           ),

@@ -15,6 +15,7 @@ import 'support_center_screen.dart';
 import 'legal_screen.dart';
 import 'notifications_settings_screen.dart';
 import '../auth/login_screen.dart';
+import '../auth/signup_screen.dart';
 
 // ============================================================================
 // شاشة الحساب / البروفايل (Profile Screen) — التصميم الجديد
@@ -38,6 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadData() async {
     final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn) return;
     // Refresh profile data
     try {
       await auth.fetchProfile();
@@ -66,6 +68,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final Color borderC = isDark
         ? AppColors.goldenBronze.withOpacity(0.15)
         : Colors.grey.shade200;
+    final auth = context.watch<AuthProvider>();
+    final bool isGuest = !auth.isLoggedIn;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -82,54 +86,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 children: [
                   _buildTopBar(context, isDark, textC),
-                  _buildProfileCard(isDark, textC, cardC, borderC),
-                  _buildStatsCard(isDark, cardC, borderC, textC),
-                  const SizedBox(height: 16),
 
-                  // ===== المكافآت والسحوبات =====
-                  _buildRewardsSection(context, isDark, textC, cardC, borderC),
-                  const SizedBox(height: 20),
+                  // ===== وضع الزائر =====
+                  if (isGuest) ...[
+                    _buildGuestWelcomeCard(isDark, textC, cardC, borderC),
+                    const SizedBox(height: 20),
+                  ],
 
-                  // ===== إعدادات الحساب =====
-                  _buildSectionTitle("إعدادات الحساب", textC),
-                  _buildSettingsGroup([
-                    _SettingItem(
-                        Icons.person_outline_rounded,
-                        "تعديل الملف الشخصي",
-                        "الاسم، الصورة، البريد",
-                        () => _push(context, const EditProfileScreen())),
-                    _SettingItem(
-                        Icons.location_on_outlined,
-                        "العناوين المحفوظة",
-                        "إضافة أو تعديل العناوين",
-                        () => _push(context, const SavedAddressesScreen())),
-                    _SettingItem(
-                        Icons.lock_outline_rounded,
-                        "الأمان والخصوصية",
-                        "كلمة المرور والتحقق",
-                        () => _push(context, const SecurityScreen())),
-                  ], isDark, cardC, borderC, textC),
+                  // ===== بيانات المستخدم (مسجّل فقط) =====
+                  if (!isGuest) ...[
+                    _buildProfileCard(isDark, textC, cardC, borderC),
+                    _buildStatsCard(isDark, cardC, borderC, textC),
+                    const SizedBox(height: 16),
 
-                  const SizedBox(height: 20),
+                    // ===== المكافآت والسحوبات =====
+                    _buildRewardsSection(
+                        context, isDark, textC, cardC, borderC),
+                    const SizedBox(height: 20),
 
-                  // ===== التفاعل والتواصل =====
-                  _buildSectionTitle("التفاعل والتواصل", textC),
-                  _buildSettingsGroup([
-                    _SettingItem(
-                        Icons.inbox_rounded,
-                        "صندوق الوارد",
-                        "المحادثات مع المتاجر",
-                        () => _push(context, const InboxScreen())),
-                    _SettingItem(
-                        Icons.store_rounded,
-                        "طلب ترقية لتاجر",
-                        "افتح متجرك الخاص",
-                        () => _push(context, const MerchantUpgradeScreen())),
-                  ], isDark, cardC, borderC, textC),
+                    // ===== إعدادات الحساب =====
+                    _buildSectionTitle("إعدادات الحساب", textC),
+                    _buildSettingsGroup([
+                      _SettingItem(
+                          Icons.person_outline_rounded,
+                          "تعديل الملف الشخصي",
+                          "الاسم، الصورة، البريد",
+                          () => _push(context, const EditProfileScreen())),
+                      _SettingItem(
+                          Icons.location_on_outlined,
+                          "العناوين المحفوظة",
+                          "إضافة أو تعديل العناوين",
+                          () => _push(context, const SavedAddressesScreen())),
+                      _SettingItem(
+                          Icons.lock_outline_rounded,
+                          "الأمان والخصوصية",
+                          "كلمة المرور والتحقق",
+                          () => _push(context, const SecurityScreen())),
+                    ], isDark, cardC, borderC, textC),
 
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                  // ===== التفضيلات =====
+                    // ===== التفاعل والتواصل =====
+                    _buildSectionTitle("التفاعل والتواصل", textC),
+                    _buildSettingsGroup([
+                      _SettingItem(
+                          Icons.inbox_rounded,
+                          "صندوق الوارد",
+                          "المحادثات مع المتاجر",
+                          () => _push(context, const InboxScreen())),
+                      _SettingItem(
+                          Icons.store_rounded,
+                          "طلب ترقية لتاجر",
+                          "افتح متجرك الخاص",
+                          () => _push(context, const MerchantUpgradeScreen())),
+                    ], isDark, cardC, borderC, textC),
+
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ===== التفضيلات (للكل) =====
                   _buildSectionTitle("التفضيلات", textC),
                   _buildSettingsGroup([
                     _SettingItem(
@@ -149,7 +164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 20),
 
-                  // ===== الدعم والمساعدة =====
+                  // ===== الدعم والمساعدة (للكل) =====
                   _buildSectionTitle("الدعم والمساعدة", textC),
                   _buildSettingsGroup([
                     _SettingItem(
@@ -161,7 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 20),
 
-                  // ===== المعلومات القانونية =====
+                  // ===== المعلومات القانونية (للكل) =====
                   _buildSectionTitle("معلومات", textC),
                   _buildSettingsGroup([
                     _SettingItem(
@@ -189,8 +204,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ], isDark, cardC, borderC, textC),
 
                   const SizedBox(height: 25),
-                  _buildLogoutButton(isDark),
-                  const SizedBox(height: 15),
+                  if (!isGuest) _buildLogoutButton(isDark),
+                  if (!isGuest) const SizedBox(height: 15),
                 ],
               ),
             ),
@@ -559,7 +574,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ? Image.network(
                                         image.toString().startsWith('http')
                                             ? image
-                                            : 'http://192.168.1.103:8000$image',
+                                            : 'http://192.168.1.103:8001$image',
                                         fit: BoxFit.cover,
                                         width: double.infinity,
                                         errorBuilder: (_, __, ___) => Container(
@@ -685,6 +700,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ==========================================
+  // بطاقة ترحيب الزائر
+  // ==========================================
+  Widget _buildGuestWelcomeCard(
+      bool isDark, Color textC, Color cardC, Color borderC) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: cardC,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.goldenBronze.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.goldenBronze.withOpacity(0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Column(children: [
+        // أيقونة
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: AppColors.goldenBronze.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.person_outline_rounded,
+              color: AppColors.goldenBronze, size: 36),
+        ),
+        const SizedBox(height: 16),
+
+        // الترحيب
+        Text("مرحباً بك في SIDE",
+            style: TextStyle(
+                color: textC, fontSize: 20, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Text("سجّل دخولك لتتمتع بجميع الميزات والمكافآت",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: textC.withOpacity(0.6), fontSize: 14, height: 1.5)),
+        const SizedBox(height: 20),
+
+        // زر تسجيل الدخول
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.goldenBronze,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const LoginScreen())),
+            child: const Text("تسجيل الدخول",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // زر إنشاء حساب
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              side: BorderSide(color: AppColors.goldenBronze.withOpacity(0.4)),
+            ),
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const SignUpScreen())),
+            child: Text("إنشاء حساب جديد",
+                style: TextStyle(
+                    color: AppColors.goldenBronze,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ==========================================
   // زر تسجيل الخروج
   // ==========================================
   Widget _buildLogoutButton(bool isDark) {
@@ -692,10 +796,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: GestureDetector(
         onTap: () async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (_) => Directionality(
+              textDirection: TextDirection.rtl,
+              child: AlertDialog(
+                backgroundColor:
+                    isDark ? const Color(0xFF072A38) : AppColors.pureWhite,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                title: Text("تسجيل الخروج",
+                    style: TextStyle(
+                        color:
+                            isDark ? AppColors.pureWhite : AppColors.lightText,
+                        fontWeight: FontWeight.w800)),
+                content: Text("هل أنت متأكد من تسجيل الخروج؟",
+                    style: TextStyle(
+                        color: isDark
+                            ? AppColors.pureWhite.withOpacity(0.8)
+                            : AppColors.lightText.withOpacity(0.8),
+                        fontSize: 15)),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child:
+                        Text("إلغاء", style: TextStyle(color: AppColors.grey)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text("تسجيل الخروج",
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
+          );
+          if (confirmed != true || !mounted) return;
           final auth = context.read<AuthProvider>();
           await auth.logout();
           if (!mounted) return;
-          // مسح كل الشاشات والذهاب للتسجيل
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (_) => const _LogoutLoginRedirect()),

@@ -10,9 +10,10 @@ import '../../presentation/screens/details/offer_details_screen.dart';
 class FocusedBrochuresSection extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback? onSeeAllTap;
+  final String? storeId;
 
   const FocusedBrochuresSection(
-      {super.key, required this.isDarkMode, this.onSeeAllTap});
+      {super.key, required this.isDarkMode, this.onSeeAllTap, this.storeId});
 
   @override
   State<FocusedBrochuresSection> createState() =>
@@ -63,9 +64,14 @@ class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
 
   Future<void> _fetchBrochures() async {
     try {
+      final params = <String, String>{
+        'offer_type': 'Brochure',
+        'page_size': '6',
+      };
+      if (widget.storeId != null) params['store'] = widget.storeId!;
       final data = await _api.get(
         ApiConstants.products,
-        queryParams: {'product_type': 'brochure', 'page_size': '6'},
+        queryParams: params,
         requiresAuth: false,
       );
 
@@ -77,23 +83,35 @@ class _FocusedBrochuresSectionState extends State<FocusedBrochuresSection> {
           _brochures = rawBrochures.map<Map<String, dynamic>>((b) {
             String storeName = b['store_name']?.toString() ?? 'متجر';
 
-            // استخراج الصورة الأنسب
+            // استخراج الصور (كل صورة = صفحة من الكتيب)
             var images = b['images'] as List?;
-            String imageUrl = (images != null && images.isNotEmpty)
-                ? ApiConstants.resolveImageUrl(
-                    images[0]['image_url']?.toString())
-                : ApiConstants.resolveImageUrl(
-                    b['image']?.toString() ?? b['thumbnail']?.toString());
+            String coverUrl = '';
+            if (images != null && images.isNotEmpty) {
+              coverUrl = ApiConstants.resolveImageUrl(
+                  images[0]['image_url']?.toString());
+            } else if (b['image_url'] != null) {
+              coverUrl =
+                  ApiConstants.resolveImageUrl(b['image_url'].toString());
+            } else if (b['image'] != null) {
+              coverUrl = ApiConstants.resolveImageUrl(b['image'].toString());
+            }
+            if (coverUrl.isEmpty) {
+              coverUrl = 'https://placehold.co/400x400/png?text=Brochure';
+            }
+
+            // عدد الصفحات = عدد الصور
+            int pagesCount = images?.length ?? 1;
 
             return {
               "id": (b['product_id'] ?? b['id'])?.toString() ?? '',
               "title": b['title']?.toString() ?? 'كتيب عروض',
               "store": storeName,
-              "logo": b['store_logo'] != null
-                  ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
+              "logo": (b['logo'] ?? b['store_logo']) != null
+                  ? ApiConstants.resolveImageUrl(
+                      (b['logo'] ?? b['store_logo']).toString())
                   : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff',
-              "image": imageUrl,
-              "pages": b['pages_count'] ?? (images?.length ?? 1),
+              "image": coverUrl,
+              "pages": pagesCount,
             };
           }).toList();
           _isLoading = false;

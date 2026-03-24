@@ -241,17 +241,16 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
       BuildContext ctx, bool isDark, Color textC, Color cardC, Color borderC) {
     final descCtrl = TextEditingController();
     bool sending = false;
-    String selectedIssueType = 'general';
+    String selectedIssueType = 'GENERAL';
     String? selectedImagePath;
 
     final issueTypes = {
-      'general': 'استفسار عام',
-      'technical': 'مشكلة تقنية',
-      'account': 'مشكلة في الحساب',
-      'payment': 'مشكلة في الدفع',
-      'complaint': 'شكوى',
-      'suggestion': 'اقتراح',
-      'other': 'أخرى',
+      'GENERAL': 'استفسار عام',
+      'TECHNICAL': 'مشكلة تقنية',
+      'BILLING': 'مشكلة في الفوترة',
+      'STORE_SETUP': 'إعداد المتجر',
+      'ORDER_PROBLEM': 'مشكلة في الطلب',
+      'OTHER': 'أخرى',
     };
 
     showModalBottomSheet(

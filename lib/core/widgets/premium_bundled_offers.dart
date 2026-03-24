@@ -12,9 +12,10 @@ import '../../presentation/screens/details/offer_details_screen.dart';
 class PremiumBundledOffersSection extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback? onSeeAllTap;
+  final String? storeId;
 
   const PremiumBundledOffersSection(
-      {super.key, required this.isDarkMode, this.onSeeAllTap});
+      {super.key, required this.isDarkMode, this.onSeeAllTap, this.storeId});
 
   @override
   State<PremiumBundledOffersSection> createState() =>
@@ -82,9 +83,11 @@ class _PremiumBundledOffersSectionState
 
   Future<void> _fetchBundles() async {
     try {
+      final params = <String, String>{'type': 'bundle', 'page_size': '6'};
+      if (widget.storeId != null) params['store'] = widget.storeId!;
       final data = await _api.get(
         ApiConstants.productGroups,
-        queryParams: {'type': 'bundle', 'page_size': '6'},
+        queryParams: params,
         requiresAuth: false,
       );
 
@@ -110,16 +113,33 @@ class _PremiumBundledOffersSectionState
             double sumOfIndividualPrices = 0;
             // 2. جمع صور المنتجات + حساب المجموع الفردي
             List<String> images = [];
-            if (b['products'] is List) {
-              for (var p in b['products']) {
+
+            // الباك اند يرجع items (كل item يحتوي product nested)
+            // نحوّلها لقائمة products مسطّحة
+            List<dynamic> products = [];
+            if (b['items'] is List) {
+              for (var item in b['items']) {
+                if (item['product'] is Map) products.add(item['product']);
+              }
+            } else if (b['products'] is List) {
+              products = b['products'] as List;
+            }
+
+            if (products.isNotEmpty) {
+              for (var p in products) {
                 // 💡 السر هنا: نجمع سعر كل منتج
-                double pPrice =
-                    double.tryParse(p['price']?.toString() ?? '0') ?? 0;
+                double pPrice = double.tryParse(p['new_price']?.toString() ??
+                        p['price']?.toString() ??
+                        '0') ??
+                    0;
                 sumOfIndividualPrices += pPrice;
 
                 if (p['images'] is List && (p['images'] as List).isNotEmpty) {
                   images.add(ApiConstants.resolveImageUrl(
                       p['images'][0]['image_url']?.toString()));
+                } else if (p['image_url'] != null) {
+                  images.add(
+                      ApiConstants.resolveImageUrl(p['image_url'].toString()));
                 } else if (p['image'] != null) {
                   images
                       .add(ApiConstants.resolveImageUrl(p['image'].toString()));
@@ -160,9 +180,11 @@ class _PremiumBundledOffersSectionState
                   b['name']?.toString() ?? b['title']?.toString() ?? 'باقة',
               "store": storeName, // تركناها لكي لا يتأثر تصميمك القديم
               "storeName": storeName, // أضفناها لكي تعمل شاشة التفاصيل بامتياز
-              "storeLogo": b['store_logo'] != null
-                  ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
+              "storeLogo": (b['logo'] ?? b['store_logo']) != null
+                  ? ApiConstants.resolveImageUrl(
+                      (b['logo'] ?? b['store_logo']).toString())
                   : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff',
+              "storeId": (b["store"] ?? b["store_id"] ?? "").toString(),
               // عرض الأسعار بعد الحساب الديناميكي
               // تم إزالة الأصفار العشرية هنا
               "price": bundlePrice > 0 ? "${bundlePrice.toInt()}\$" : "0\$",
@@ -368,6 +390,8 @@ class _PremiumBundledOffersSectionState
                                   context,
                                   MaterialPageRoute(
                                       builder: (_) => MerchantProfileScreen(
+                                          storeId: (bundle["storeId"] ?? '')
+                                              .toString(),
                                           storeName: bundle["store"] ?? "متجر",
                                           storeLogo: bundle["storeLogo"] ??
                                               "https://i.pravatar.cc/150?img=11"))),
@@ -385,6 +409,8 @@ class _PremiumBundledOffersSectionState
                               MaterialPageRoute(
                                   builder: (_) => MerchantProfileScreen(
                                       storeName: bundle["store"] ?? "متجر",
+                                      storeId:
+                                          (bundle["storeId"] ?? '').toString(),
                                       storeLogo: bundle["storeLogo"] ??
                                           "https://i.pravatar.cc/150?img=11"))),
                           child: Text(bundle["store"],

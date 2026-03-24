@@ -136,8 +136,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   '${((displayOldPrice - bundlePrice) / displayOldPrice * 100).toStringAsFixed(0)}%';
             }
 
-            String storeLogo = b['store_logo'] != null
-                ? ApiConstants.resolveImageUrl(b['store_logo'].toString())
+            String storeLogo = (b['logo'] ?? b['store_logo']) != null
+                ? ApiConstants.resolveImageUrl(
+                    (b['logo'] ?? b['store_logo']).toString())
                 : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
             items.add({
@@ -228,12 +229,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
       title = product['title']?.toString() ?? title;
       storeName = product['store_name']?.toString() ?? 'متجر';
-      if (product['store_logo'] != null) {
-        storeLogo =
-            ApiConstants.resolveImageUrl(product['store_logo'].toString());
+      if (product['logo'] != null || product['store_logo'] != null) {
+        storeLogo = ApiConstants.resolveImageUrl(
+            (product['logo'] ?? product['store_logo']).toString());
       }
 
-      double price = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
+      double price = double.tryParse(product['new_price']?.toString() ??
+              product['price']?.toString() ??
+              '0') ??
+          0;
       double oldPrice =
           double.tryParse(product['old_price']?.toString() ?? '0') ?? 0;
       priceStr = '${price.toStringAsFixed(price == price.toInt() ? 0 : 2)}\$';
@@ -618,6 +622,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                     context,
                                     MaterialPageRoute(
                                         builder: (_) => MerchantProfileScreen(
+                                            storeId: (bundle["storeId"] ??
+                                                    bundle["store_id"] ??
+                                                    "")
+                                                .toString(),
                                             storeName:
                                                 bundle["store"] ?? "متجر",
                                             storeLogo: bundle["storeLogo"] ??

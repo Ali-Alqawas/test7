@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/network/api_constants.dart';
 import '../details/merchant_profile_screen.dart';
 
 // ============================================================================
-// شاشة جميع المتاجر (All Stores Screen)
+// شاشة جميع المتاجر (All Stores Screen) — مربوطة بالـ API
 // ============================================================================
 class AllStoresScreen extends StatefulWidget {
   const AllStoresScreen({super.key});
@@ -15,98 +17,17 @@ class AllStoresScreen extends StatefulWidget {
 
 class _AllStoresScreenState extends State<AllStoresScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ApiService _api = ApiService();
 
-  final List<Map<String, dynamic>> _stores = [
-    {
-      "name": "آبل ستور",
-      "logo": "https://i.pravatar.cc/150?img=15",
-      "category": "إلكترونيات",
-      "rating": 4.8,
-      "offers": 32
-    },
-    {
-      "name": "نايك ستور",
-      "logo": "https://i.pravatar.cc/150?img=33",
-      "category": "أزياء رجالية",
-      "rating": 4.5,
-      "offers": 18
-    },
-    {
-      "name": "زارا",
-      "logo": "https://i.pravatar.cc/150?img=34",
-      "category": "أزياء نسائية",
-      "rating": 4.6,
-      "offers": 45
-    },
-    {
-      "name": "اكسترا",
-      "logo": "https://i.pravatar.cc/150?img=11",
-      "category": "إلكترونيات",
-      "rating": 4.3,
-      "offers": 67
-    },
-    {
-      "name": "ساكو",
-      "logo": "https://i.pravatar.cc/150?img=12",
-      "category": "أجهزة منزلية",
-      "rating": 4.2,
-      "offers": 23
-    },
-    {
-      "name": "سنتربوينت",
-      "logo": "https://i.pravatar.cc/150?img=13",
-      "category": "أزياء",
-      "rating": 4.4,
-      "offers": 55
-    },
-    {
-      "name": "العربية للعود",
-      "logo": "https://i.pravatar.cc/150?img=14",
-      "category": "عطور",
-      "rating": 4.7,
-      "offers": 12
-    },
-    {
-      "name": "مغربي للبصريات",
-      "logo": "https://i.pravatar.cc/150?img=16",
-      "category": "إكسسوارات",
-      "rating": 4.1,
-      "offers": 8
-    },
-    {
-      "name": "جرير",
-      "logo": "https://i.pravatar.cc/150?img=17",
-      "category": "إلكترونيات",
-      "rating": 4.6,
-      "offers": 41
-    },
-    {
-      "name": "باث آند بودي",
-      "logo": "https://i.pravatar.cc/150?img=18",
-      "category": "صحة وجمال",
-      "rating": 4.5,
-      "offers": 15
-    },
-    {
-      "name": "لولو هايبر",
-      "logo": "https://i.pravatar.cc/150?img=19",
-      "category": "سوبرماركت",
-      "rating": 4.0,
-      "offers": 92
-    },
-    {
-      "name": "ايكيا",
-      "logo": "https://i.pravatar.cc/150?img=20",
-      "category": "أثاث ومنزل",
-      "rating": 4.4,
-      "offers": 38
-    },
-  ];
+  List<Map<String, dynamic>> _stores = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() => setState(() {}));
+    _fetchStores();
+    _searchController.addListener(_onSearchChanged);
   }
 
   @override
@@ -115,14 +36,40 @@ class _AllStoresScreenState extends State<AllStoresScreen> {
     super.dispose();
   }
 
-  List<Map<String, dynamic>> get _filtered {
-    if (_searchController.text.isEmpty) return _stores;
-    final q = _searchController.text.toLowerCase();
-    return _stores
-        .where((s) =>
-            (s["name"] as String).toLowerCase().contains(q) ||
-            (s["category"] as String).toLowerCase().contains(q))
-        .toList();
+  void _onSearchChanged() {
+    final q = _searchController.text.trim();
+    if (q != _searchQuery) {
+      _searchQuery = q;
+      _fetchStores();
+    }
+  }
+
+  Future<void> _fetchStores() async {
+    setState(() => _isLoading = true);
+    try {
+      final params = <String, String>{'page_size': '50'};
+      if (_searchQuery.isNotEmpty) params['search'] = _searchQuery;
+      params['ordering'] = '-average_rating';
+
+      final data = await _api.get(
+        ApiConstants.stores,
+        queryParams: params,
+        requiresAuth: false,
+      );
+
+      final List raw =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      if (mounted) {
+        setState(() {
+          _stores = raw.cast<Map<String, dynamic>>();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ جلب المتاجر: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -141,23 +88,49 @@ class _AllStoresScreenState extends State<AllStoresScreen> {
             children: [
               _buildHeader(isDark, textC, cardC),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: GridView.builder(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(top: 10, bottom: 100),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 14,
-                      crossAxisSpacing: 14,
-                      childAspectRatio: 0.85,
-                    ),
-                    itemCount: _filtered.length,
-                    itemBuilder: (_, i) =>
-                        _buildStoreCard(_filtered[i], isDark, textC, cardC),
-                  ),
-                ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.goldenBronze))
+                    : _stores.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.store_mall_directory_outlined,
+                                    color: textC.withOpacity(0.3), size: 60),
+                                const SizedBox(height: 12),
+                                Text("لا توجد متاجر",
+                                    style: TextStyle(
+                                        color: textC.withOpacity(0.5),
+                                        fontSize: 16)),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            color: AppColors.goldenBronze,
+                            onRefresh: _fetchStores,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: GridView.builder(
+                                physics: const AlwaysScrollableScrollPhysics(
+                                    parent: BouncingScrollPhysics()),
+                                padding:
+                                    const EdgeInsets.only(top: 10, bottom: 100),
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 14,
+                                  crossAxisSpacing: 14,
+                                  childAspectRatio: 0.85,
+                                ),
+                                itemCount: _stores.length,
+                                itemBuilder: (_, i) => _buildStoreCard(
+                                    _stores[i], isDark, textC, cardC),
+                              ),
+                            ),
+                          ),
               ),
             ],
           ),
@@ -196,21 +169,22 @@ class _AllStoresScreenState extends State<AllStoresScreen> {
                   style: TextStyle(
                       color: textC, fontSize: 24, fontWeight: FontWeight.w900)),
               const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.goldenBronze.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: AppColors.goldenBronze.withOpacity(0.3)),
+              if (!_isLoading)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.goldenBronze.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: AppColors.goldenBronze.withOpacity(0.3)),
+                  ),
+                  child: Text("${_stores.length} متجر",
+                      style: const TextStyle(
+                          color: AppColors.goldenBronze,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold)),
                 ),
-                child: Text("${_stores.length} متجر",
-                    style: const TextStyle(
-                        color: AppColors.goldenBronze,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold)),
-              ),
               const Spacer(),
               GestureDetector(
                 onTap: toggleGlobalTheme,
@@ -274,7 +248,11 @@ class _AllStoresScreenState extends State<AllStoresScreen> {
               ),
               if (_searchController.text.isNotEmpty)
                 GestureDetector(
-                  onTap: () => _searchController.clear(),
+                  onTap: () {
+                    _searchController.clear();
+                    _searchQuery = '';
+                    _fetchStores();
+                  },
                   child: const Icon(Icons.close_rounded,
                       color: AppColors.grey, size: 18),
                 ),
@@ -290,12 +268,23 @@ class _AllStoresScreenState extends State<AllStoresScreen> {
     final borderC =
         isDark ? AppColors.goldenBronze.withOpacity(0.2) : Colors.grey.shade200;
 
+    final String name = store['name'] ?? 'متجر';
+    final String storeId = (store['store_id'] ?? store['id'] ?? '').toString();
+    final String logo = store['logo'] != null &&
+            store['logo'].toString().isNotEmpty
+        ? ApiConstants.resolveImageUrl(store['logo'].toString())
+        : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=random&color=fff';
+    final String activityType = _activityLabel(store['activity_type']);
+    final double rating =
+        double.tryParse(store['average_rating']?.toString() ?? '0') ?? 0;
+    final bool isVerified = store['verification_status'] == 'VERIFIED';
+
     return GestureDetector(
       onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
               builder: (_) => MerchantProfileScreen(
-                  storeName: store["name"], storeLogo: store["logo"]))),
+                  storeId: storeId, storeName: name, storeLogo: logo))),
       child: Container(
         decoration: BoxDecoration(
           color: cardC,
@@ -322,46 +311,74 @@ class _AllStoresScreenState extends State<AllStoresScreen> {
               child: CircleAvatar(
                 radius: 32,
                 backgroundColor: AppColors.lightBackground,
-                backgroundImage: NetworkImage(store["logo"]),
+                backgroundImage: NetworkImage(logo),
               ),
             ),
             const SizedBox(height: 12),
-            // الاسم
-            Text(store["name"],
-                style: TextStyle(
-                    color: textC, fontSize: 14, fontWeight: FontWeight.w800),
-                textAlign: TextAlign.center),
+            // الاسم + التوثيق
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(name,
+                      style: TextStyle(
+                          color: textC,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                if (isVerified) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.all(1.5),
+                    decoration: const BoxDecoration(
+                        color: Color(0xFF1DA1F2), shape: BoxShape.circle),
+                    child:
+                        const Icon(Icons.check, color: Colors.white, size: 10),
+                  ),
+                ],
+              ],
+            ),
             const SizedBox(height: 4),
             // التصنيف
-            Text(store["category"],
+            Text(activityType,
                 style: TextStyle(
                     color: AppColors.goldenBronze.withOpacity(0.8),
                     fontSize: 11,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            // التقييم + عدد العروض
+            // التقييم
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               const Icon(Icons.star_rounded,
                   color: AppColors.goldenBronze, size: 14),
               const SizedBox(width: 3),
-              Text("${store["rating"]}",
+              Text(rating > 0 ? rating.toStringAsFixed(1) : "—",
                   style: const TextStyle(
                       color: AppColors.goldenBronze,
                       fontSize: 12,
                       fontWeight: FontWeight.bold)),
-              const SizedBox(width: 10),
-              Icon(Icons.local_offer_outlined,
-                  color: textC.withOpacity(0.4), size: 13),
-              const SizedBox(width: 3),
-              Text("${store["offers"]} عرض",
-                  style: TextStyle(
-                      color: textC.withOpacity(0.5),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600)),
             ]),
           ],
         ),
       ),
     );
+  }
+
+  String _activityLabel(String? type) {
+    switch (type) {
+      case 'RETAIL':
+        return 'تجزئة';
+      case 'SERVICE':
+        return 'خدمات';
+      case 'FOOD':
+        return 'مطاعم ومشروبات';
+      case 'OTHER':
+        return 'أخرى';
+      default:
+        return 'متجر';
+    }
   }
 }

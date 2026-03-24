@@ -12,9 +12,10 @@ import '../../presentation/screens/details/offer_details_screen.dart';
 class PremiumFeaturedOffersSection extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback? onSeeAllTap;
+  final String? storeId;
 
   const PremiumFeaturedOffersSection(
-      {super.key, required this.isDarkMode, this.onSeeAllTap});
+      {super.key, required this.isDarkMode, this.onSeeAllTap, this.storeId});
 
   @override
   State<PremiumFeaturedOffersSection> createState() =>
@@ -35,9 +36,11 @@ class _PremiumFeaturedOffersSectionState
 
   Future<void> _fetchFeaturedOffers() async {
     try {
+      final params = <String, String>{'is_featured': 'true', 'page_size': '6'};
+      if (widget.storeId != null) params['store'] = widget.storeId!;
       final data = await _api.get(
         ApiConstants.products,
-        queryParams: {'is_featured': 'true', 'page_size': '6'},
+        queryParams: params,
         requiresAuth: false,
       );
 
@@ -51,13 +54,16 @@ class _PremiumFeaturedOffersSectionState
             String imageUrl = (images != null && images.isNotEmpty)
                 ? ApiConstants.resolveImageUrl(
                     images[0]['image_url']?.toString())
-                : ApiConstants.resolveImageUrl(apiOffer['image']?.toString() ??
-                    apiOffer['thumbnail']?.toString());
+                : ApiConstants.resolveImageUrl(
+                    apiOffer['image_url']?.toString() ??
+                        apiOffer['image']?.toString() ??
+                        apiOffer['thumbnail']?.toString());
 
             String storeName = apiOffer['store_name'] ?? 'متجر غير معروف';
-            String storeLogo = apiOffer['store_logo'] != null
+            String storeLogo = (apiOffer['logo'] ?? apiOffer['store_logo']) !=
+                    null
                 ? ApiConstants.resolveImageUrl(
-                    apiOffer['store_logo'].toString())
+                    (apiOffer['logo'] ?? apiOffer['store_logo']).toString())
                 : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
 
             return {
@@ -65,9 +71,10 @@ class _PremiumFeaturedOffersSectionState
               "title": apiOffer['title'] ?? 'بدون عنوان',
               "storeName": storeName,
               "storeLogo": storeLogo,
-              "storeId": apiOffer['store']?.toString() ?? "",
+              "storeId":
+                  (apiOffer["store"] ?? apiOffer["store_id"] ?? "").toString(),
               "image": imageUrl,
-              "price": "${apiOffer['price'] ?? '0'}\$",
+              "price": "${apiOffer['new_price'] ?? apiOffer['price'] ?? '0'}\$",
               "oldPrice": apiOffer['old_price'] != null
                   ? "${apiOffer['old_price']}\$"
                   : "",
@@ -230,6 +237,8 @@ class _PremiumFeaturedOffersSectionState
                                 context,
                                 MaterialPageRoute(
                                     builder: (_) => MerchantProfileScreen(
+                                        storeId:
+                                            (offer["storeId"] ?? '').toString(),
                                         storeName: offer["storeName"] ?? "متجر",
                                         storeLogo: offer["storeLogo"] ??
                                             "https://i.pravatar.cc/150?img=11"))),
@@ -271,6 +280,8 @@ class _PremiumFeaturedOffersSectionState
                             MaterialPageRoute(
                                 builder: (_) => MerchantProfileScreen(
                                     storeName: offer["storeName"] ?? "متجر",
+                                    storeId:
+                                        (offer["storeId"] ?? '').toString(),
                                     storeLogo: offer["storeLogo"] ??
                                         "https://i.pravatar.cc/150?img=11"))),
                         child: Text(offer["storeName"],

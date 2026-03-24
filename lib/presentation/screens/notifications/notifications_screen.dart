@@ -81,7 +81,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             final type = notif['notification_type']?.toString() ??
                 notif['type']?.toString();
             return {
-              "id": notif['id']?.toString() ?? '',
+              "id": (notif['notification_id'] ?? notif['id'])?.toString() ?? '',
               "title": notif['title']?.toString() ?? 'إشعار',
               "body": notif['message']?.toString() ??
                   notif['body']?.toString() ??

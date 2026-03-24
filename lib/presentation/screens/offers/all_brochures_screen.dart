@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/network/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../details/offer_details_screen.dart';
@@ -6,6 +8,7 @@ import '../details/offer_details_screen.dart';
 // ============================================================================
 // شاشة جميع كتيبات العروض (All Brochures Screen)
 // كل صف = كتيب واحد مع تمرير أفقي لصفحات الكتيب نفسه
+// يجلب البيانات من API: GET /catalog/product-groups/
 // ============================================================================
 class AllBrochuresScreen extends StatefulWidget {
   const AllBrochuresScreen({super.key});
@@ -16,75 +19,74 @@ class AllBrochuresScreen extends StatefulWidget {
 
 class _AllBrochuresScreenState extends State<AllBrochuresScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ApiService _api = ApiService();
 
-  // كتيبات العروض مع صفحات كل كتيب
-  static final List<Map<String, dynamic>> _allBrochures = [
-    {
-      "title": "عروض التوفير الأسبوعية",
-      "store": "هايبر بنده",
-      "logo": "https://i.pravatar.cc/150?img=50",
-      "pages": [
-        "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSIqN_eJmuaY_Ieg2VxN0Cl3id1t81YfToc4D6KLpRXBrb266wL",
-        "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1534723452862-4c874018d66d?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1607082349566-187342175e2f?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1601598851547-4302969d0614?auto=format&fit=crop&w=600&q=80",
-      ],
-    },
-    {
-      "title": "مهرجان الإلكترونيات",
-      "store": "اكسترا",
-      "logo": "https://i.pravatar.cc/150?img=11",
-      "pages": [
-        "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSoxS32kQm0GdKR_xd6svz7kSV2ASWm1P-L_Mo4xUjjbVEfsDDR",
-        "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1517336714731-489689fd1ca4?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80",
-      ],
-    },
-    {
-      "title": "أقوى عروض العودة للمدارس",
-      "store": "مكتبة جرير",
-      "logo": "https://i.pravatar.cc/150?img=33",
-      "pages": [
-        "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=600&q=80",
-      ],
-    },
-    {
-      "title": "تخفيضات نهاية الموسم",
-      "store": "سيتي ماكس",
-      "logo": "https://i.pravatar.cc/150?img=44",
-      "pages": [
-        "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=600&q=80",
-      ],
-    },
-    {
-      "title": "كتالوج عروض الأجهزة المنزلية",
-      "store": "ساكو",
-      "logo": "https://i.pravatar.cc/150?img=12",
-      "pages": [
-        "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1586208958839-06c17cacdf08?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1574269909862-7e1d70bb8078?auto=format&fit=crop&w=600&q=80",
-      ],
-    },
-  ];
-
+  List<Map<String, dynamic>> _allBrochures = [];
   late List<Map<String, dynamic>> _displayedBrochures;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _displayedBrochures = List.from(_allBrochures);
+    _displayedBrochures = [];
     _searchController.addListener(_onSearch);
+    _fetchBrochures();
+  }
+
+  Future<void> _fetchBrochures() async {
+    try {
+      final data = await _api.get(
+        ApiConstants.products,
+        queryParams: {'offer_type': 'Brochure', 'page_size': '50'},
+        requiresAuth: false,
+      );
+
+      final List rawBrochures =
+          data is Map ? (data['results'] ?? []) : (data is List ? data : []);
+
+      if (mounted) {
+        setState(() {
+          _allBrochures = rawBrochures.map<Map<String, dynamic>>((b) {
+            String storeName = b['store_name']?.toString() ?? 'متجر';
+
+            // صور المنتج = صفحات الكتيب
+            var productImages = b['images'] as List? ?? [];
+            List<String> pageUrls = productImages
+                .map((img) =>
+                    ApiConstants.resolveImageUrl(img['image_url']?.toString()))
+                .toList();
+
+            // صورة الغلاف
+            String coverUrl = pageUrls.isNotEmpty
+                ? pageUrls.first
+                : (b['image_url'] != null
+                    ? ApiConstants.resolveImageUrl(b['image_url'].toString())
+                    : 'https://placehold.co/400x400/png?text=Brochure');
+
+            // شعار المتجر
+            String storeLogo = (b['logo'] ?? b['store_logo']) != null
+                ? ApiConstants.resolveImageUrl(
+                    (b['logo'] ?? b['store_logo']).toString())
+                : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(storeName)}&background=B8860B&color=fff';
+
+            return {
+              "product_id": (b['product_id'] ?? b['id'])?.toString() ?? '',
+              "title": b['title']?.toString() ?? 'كتيب عروض',
+              "store": storeName,
+              "logo": storeLogo,
+              "pages": pageUrls.isNotEmpty ? pageUrls : [coverUrl],
+              "image": coverUrl,
+              "description": b['description']?.toString() ?? '',
+            };
+          }).toList();
+          _displayedBrochures = List.from(_allBrochures);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ في جلب الكتيبات: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _onSearch() {
@@ -122,17 +124,27 @@ class _AllBrochuresScreenState extends State<AllBrochuresScreen> {
             children: [
               _buildHeader(context, isDarkMode),
               Expanded(
-                child: _displayedBrochures.isEmpty
-                    ? _buildEmptyState(isDarkMode)
-                    : ListView.builder(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 5, 16, 100),
-                        itemCount: _displayedBrochures.length,
-                        itemBuilder: (context, index) {
-                          return _buildBrochureRow(
-                              _displayedBrochures[index], isDarkMode);
-                        },
-                      ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.goldenBronze))
+                    : _displayedBrochures.isEmpty
+                        ? _buildEmptyState(isDarkMode)
+                        : RefreshIndicator(
+                            color: AppColors.goldenBronze,
+                            onRefresh: _fetchBrochures,
+                            child: ListView.builder(
+                              physics: const BouncingScrollPhysics(
+                                  parent: AlwaysScrollableScrollPhysics()),
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 5, 16, 100),
+                              itemCount: _displayedBrochures.length,
+                              itemBuilder: (context, index) {
+                                return _buildBrochureRow(
+                                    _displayedBrochures[index], isDarkMode);
+                              },
+                            ),
+                          ),
               ),
             ],
           ),
