@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 
 class SecurityScreen extends StatefulWidget {
@@ -337,13 +338,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                         ? null
                         : () async {
                             if (phoneCtrl.text.trim().isEmpty) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                                content: const Text("يرجى إدخال رقم الهاتف"),
-                                backgroundColor: AppColors.error,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ));
+                              AppToast.warning(ctx, 'يرجى إدخال رقم الهاتف');
                               return;
                             }
 
@@ -356,22 +351,10 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
                             if (success) {
                               Navigator.pop(context);
-                              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                                content: const Text("تمت إضافة الرقم بنجاح ✓"),
-                                backgroundColor: AppColors.goldenBronze,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ));
+                              AppToast.success(ctx, 'تمت إضافة الرقم بنجاح ✓');
                             } else {
-                              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                                content: Text(
-                                    auth.errorMessage ?? 'فشل إضافة الرقم'),
-                                backgroundColor: AppColors.error,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ));
+                              AppToast.error(
+                                  ctx, auth.errorMessage ?? 'فشل إضافة الرقم');
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -475,24 +458,12 @@ class _SecurityScreenState extends State<SecurityScreen> {
                             if (oldCtrl.text.isEmpty ||
                                 newCtrl.text.isEmpty ||
                                 confirmCtrl.text.isEmpty) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                                content: const Text("يرجى ملء جميع الحقول"),
-                                backgroundColor: AppColors.error,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ));
+                              AppToast.warning(ctx, 'يرجى ملء جميع الحقول');
                               return;
                             }
                             if (newCtrl.text != confirmCtrl.text) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                                content: const Text(
-                                    "كلمة المرور الجديدة غير متطابقة"),
-                                backgroundColor: AppColors.error,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ));
+                              AppToast.warning(
+                                  ctx, 'كلمة المرور الجديدة غير متطابقة');
                               return;
                             }
 
@@ -507,23 +478,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
                             if (success) {
                               Navigator.pop(context);
-                              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                                content:
-                                    const Text("تم تغيير كلمة المرور بنجاح ✓"),
-                                backgroundColor: AppColors.goldenBronze,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ));
+                              AppToast.success(
+                                  ctx, 'تم تغيير كلمة المرور بنجاح ✓');
                             } else {
-                              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                                content: Text(auth.errorMessage ??
-                                    'فشل تغيير كلمة المرور'),
-                                backgroundColor: AppColors.error,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ));
+                              AppToast.error(ctx,
+                                  auth.errorMessage ?? 'فشل تغيير كلمة المرور');
                             }
                           },
                     style: ElevatedButton.styleFrom(

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
 import 'saved_addresses_screen.dart';
@@ -485,14 +486,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (code.isNotEmpty) {
                       Clipboard.setData(ClipboardData(text: code));
                     }
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(code.isNotEmpty
-                            ? "تم نسخ رابط الإحالة: $code ✓"
-                            : "تم نسخ رابط الإحالة ✓"),
-                        backgroundColor: AppColors.goldenBronze,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12))));
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    AppToast.success(
+                        context,
+                        code.isNotEmpty
+                            ? 'تم نسخ رابط الإحالة: $code ✓'
+                            : 'تم نسخ رابط الإحالة ✓');
                   },
                   child: Container(
                     padding:

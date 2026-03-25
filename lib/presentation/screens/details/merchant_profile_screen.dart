@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/api_constants.dart';
 import '../../../core/helpers/auth_guard.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../core/widgets/premium_standard_offer_card.dart';
 import '../../../core/widgets/premium_featured_offers.dart';
 import '../../../core/widgets/premium_bundled_offers.dart';
@@ -1288,22 +1289,14 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
                                 Navigator.pop(context);
                                 _fetchRatings();
                                 _fetchStoreDetails();
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("شكراً لتقييمك! ✨"),
-                                    backgroundColor: AppColors.goldenBronze,
-                                  ),
-                                );
+                                AppToast.success(
+                                    this.context, 'شكراً لتقييمك! ✨');
                               }
                             } catch (e) {
                               setSheetState(() => isSending = false);
                               if (mounted) {
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("فشل إرسال التقييم"),
-                                    backgroundColor: AppColors.error,
-                                  ),
-                                );
+                                AppToast.error(
+                                    this.context, 'فشل إرسال التقييم');
                               }
                             }
                           },
@@ -1487,23 +1480,14 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
                               });
                               if (mounted) {
                                 Navigator.pop(context);
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text("تم إرسال البلاغ، شكراً لك 🙏"),
-                                    backgroundColor: AppColors.goldenBronze,
-                                  ),
-                                );
+                                AppToast.success(this.context,
+                                    'تم إرسال البلاغ، شكراً لك 🙏');
                               }
                             } catch (e) {
                               setSheetState(() => isSending = false);
                               if (mounted) {
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("فشل إرسال البلاغ"),
-                                    backgroundColor: AppColors.error,
-                                  ),
-                                );
+                                AppToast.error(
+                                    this.context, 'فشل إرسال البلاغ');
                               }
                             }
                           },

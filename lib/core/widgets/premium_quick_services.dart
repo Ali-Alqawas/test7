@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../helpers/auth_guard.dart';
 import '../../presentation/screens/stores/all_stores_screen.dart';
 import '../../presentation/screens/profile/draws_screen.dart';
 import '../../presentation/screens/profile/rewards_screen.dart';
@@ -17,34 +18,50 @@ class PremiumQuickServicesSection extends StatelessWidget {
       {
         "title": "المتاجر",
         "icon": Icons.storefront_rounded,
-        "screen": const AllStoresScreen()
+        "screen": const AllStoresScreen(),
+        "requiresAuth": false
       },
       {
         "title": "المكافآت",
         "icon": Icons.card_giftcard_rounded,
-        "screen": null
+        "screen": null,
+        "requiresAuth": true
       },
       {
         "title": "السحوبات",
         "icon": Icons.confirmation_num_outlined,
-        "screen": const DrawsScreen()
+        "screen": const DrawsScreen(),
+        "requiresAuth": true
       },
-      {"title": "عروض اليوم", "icon": Icons.bolt_rounded, "screen": null},
-      {"title": "كوبونات", "icon": Icons.local_offer_outlined, "screen": null},
+      {
+        "title": "عروض اليوم",
+        "icon": Icons.bolt_rounded,
+        "screen": null,
+        "requiresAuth": false
+      },
+      {
+        "title": "كوبونات",
+        "icon": Icons.local_offer_outlined,
+        "screen": null,
+        "requiresAuth": false
+      },
       {
         "title": "محفظة النقاط",
         "icon": Icons.account_balance_wallet_rounded,
-        "screen": const RewardsScreen()
+        "screen": const RewardsScreen(),
+        "requiresAuth": true
       },
       {
         "title": "الترقية لتاجر",
         "icon": Icons.store_mall_directory_rounded,
-        "screen": const MerchantUpgradeScreen()
+        "screen": const MerchantUpgradeScreen(),
+        "requiresAuth": true
       },
       {
         "title": "خدمة العملاء",
         "icon": Icons.support_agent_rounded,
-        "screen": const SupportCenterScreen()
+        "screen": const SupportCenterScreen(),
+        "requiresAuth": true
       },
     ];
 
@@ -98,6 +115,10 @@ class PremiumQuickServicesSection extends StatelessWidget {
       onTap: () {
         final screen = service["screen"];
         if (screen != null) {
+          // تحقق من تسجيل الدخول للخدمات المحمية
+          final requiresAuth = service["requiresAuth"] == true;
+          if (requiresAuth && !AuthGuard.requireAuth(context)) return;
+
           Navigator.push(
               context, MaterialPageRoute(builder: (_) => screen as Widget));
         }

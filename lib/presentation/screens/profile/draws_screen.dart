@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/network/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
-
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 
 class DrawsScreen extends StatefulWidget {
@@ -14,7 +15,6 @@ class DrawsScreen extends StatefulWidget {
 class _DrawsScreenState extends State<DrawsScreen> {
   List<Map<String, dynamic>> _draws = [];
   bool _loading = true;
-  final Set<String> _enteredDrawIds = {};
 
   @override
   void initState() {
@@ -86,21 +86,16 @@ class _DrawsScreenState extends State<DrawsScreen> {
     if (!mounted) return;
 
     if (success) {
-      _enteredDrawIds.add(id);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text("تم تسجيلك في السحب بنجاح 🎉"),
-        backgroundColor: AppColors.goldenBronze,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      // تحديث محلي فوري + إعادة تحميل من API
+      setState(() {
+        final idx = _draws.indexWhere(
+            (d) => (d['draw_id'] ?? d['id'] ?? '').toString() == id);
+        if (idx >= 0) _draws[idx]['is_entered'] = true;
+      });
+      AppToast.success(context, 'تم تسجيلك في السحب بنجاح 🎉');
       _loadDraws();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(auth.errorMessage ?? 'فشل الدخول في السحب'),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      AppToast.error(context, auth.errorMessage ?? 'فشل الدخول في السحب');
     }
   }
 
@@ -215,8 +210,8 @@ class _DrawsScreenState extends State<DrawsScreen> {
     final entriesCount = d['entries_count'] ?? 0;
     final status = (d['status'] ?? 'ACTIVE').toString();
     final sInfo = _statusInfo(status);
-    final bool canEnter = sInfo['canEnter'] == true &&
-        !_enteredDrawIds.contains((d['draw_id'] ?? d['id'] ?? '').toString());
+    final bool isEntered = d['is_entered'] == true || d['user_entered'] == true;
+    final bool canEnter = sInfo['canEnter'] == true && !isEntered;
     final remaining = _timeRemaining(endDate.toString());
 
     return GestureDetector(
@@ -248,15 +243,8 @@ class _DrawsScreenState extends State<DrawsScreen> {
                   const BorderRadius.vertical(top: Radius.circular(19)),
             ),
             child: Row(children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                    color: AppColors.goldenBronze.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(14)),
-                child: const Icon(Icons.card_giftcard_rounded,
-                    color: AppColors.goldenBronze, size: 26),
-              ),
+              // صورة السحب أو الأيقونة
+              _buildDrawImage(d, 50, 14),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -305,43 +293,43 @@ class _DrawsScreenState extends State<DrawsScreen> {
                 const SizedBox(height: 8),
                 _info(Icons.timer_rounded, remaining, textC.withOpacity(0.5)),
               ],
-              if (canEnter) ...[
+              if (canEnter || isEntered) ...[
                 const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => _enterDraw(d),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.goldenBronze,
-                      foregroundColor: AppColors.deepNavy,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text("دخول السحب 🎉",
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14)),
-                  ),
-                ),
-              ],
-              if (sInfo['canEnter'] == true &&
-                  _enteredDrawIds.contains(
-                      (d['draw_id'] ?? d['id'] ?? '').toString())) ...[
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
+                GestureDetector(
+                  onTap: canEnter ? () => _enterDraw(d) : null,
                   child: Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: isEntered
+                          ? Colors.transparent
+                          : AppColors.goldenBronze,
                       borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: AppColors.goldenBronze, width: 2),
                     ),
-                    child: const Center(
-                      child: Text("تم التسجيل ✓",
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                            isEntered
+                                ? Icons.check_circle_rounded
+                                : Icons.confirmation_number_rounded,
+                            color: isEntered
+                                ? AppColors.goldenBronze
+                                : AppColors.deepNavy,
+                            size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          isEntered ? "تم التسجيل ✓" : "دخول السحب 🎉",
                           style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14)),
+                              color: isEntered
+                                  ? AppColors.goldenBronze
+                                  : AppColors.deepNavy,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -363,6 +351,43 @@ class _DrawsScreenState extends State<DrawsScreen> {
     ]);
   }
 
+  /// صورة السحب — إذا وجدت نعرضها وإلا أيقونة
+  Widget _buildDrawImage(Map<String, dynamic> d, double size, double radius) {
+    final imageUrl = (d['image_url'] ?? d['image'])?.toString();
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      final resolved = ApiConstants.resolveImageUrl(imageUrl);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Image.network(
+          resolved,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: AppColors.goldenBronze.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(radius),
+            ),
+            child: Icon(Icons.card_giftcard_rounded,
+                color: AppColors.goldenBronze, size: size * 0.5),
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: AppColors.goldenBronze.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: Icon(Icons.card_giftcard_rounded,
+          color: AppColors.goldenBronze, size: size * 0.5),
+    );
+  }
+
   void _showDrawDetails(
       Map<String, dynamic> d, bool isDark, Color textC, Color cardC) {
     final name = d['name'] ?? 'سحب';
@@ -375,6 +400,7 @@ class _DrawsScreenState extends State<DrawsScreen> {
     final status = (d['status'] ?? 'ACTIVE').toString();
     final sInfo = _statusInfo(status);
     final bool canEnter = sInfo['canEnter'] == true;
+    final bool isEntered = d['is_entered'] == true || d['user_entered'] == true;
     final remaining = _timeRemaining(endDate.toString());
 
     // تنسيق التاريخ
@@ -412,15 +438,8 @@ class _DrawsScreenState extends State<DrawsScreen> {
             const SizedBox(height: 20),
             // العنوان والحالة
             Row(children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                    color: AppColors.goldenBronze.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16)),
-                child: const Icon(Icons.card_giftcard_rounded,
-                    color: AppColors.goldenBronze, size: 30),
-              ),
+              // صورة السحب
+              _buildDrawImage(d, 56, 16),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(name.toString(),
@@ -503,23 +522,46 @@ class _DrawsScreenState extends State<DrawsScreen> {
                       height: 1.7)),
             ],
             const Spacer(),
-            if (canEnter)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _enterDraw(d);
-                  },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.goldenBronze,
-                      foregroundColor: AppColors.deepNavy,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14))),
-                  child: const Text("دخول السحب 🎉",
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            if (canEnter || isEntered)
+              GestureDetector(
+                onTap: canEnter
+                    ? () {
+                        Navigator.pop(context);
+                        _enterDraw(d);
+                      }
+                    : null,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color:
+                        isEntered ? Colors.transparent : AppColors.goldenBronze,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.goldenBronze, width: 2),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                          isEntered
+                              ? Icons.check_circle_rounded
+                              : Icons.confirmation_number_rounded,
+                          color: isEntered
+                              ? AppColors.goldenBronze
+                              : AppColors.deepNavy,
+                          size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        isEntered ? "تم التسجيل في السحب ✓" : "دخول السحب 🎉",
+                        style: TextStyle(
+                            color: isEntered
+                                ? AppColors.goldenBronze
+                                : AppColors.deepNavy,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
               )
             else

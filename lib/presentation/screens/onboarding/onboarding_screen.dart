@@ -59,6 +59,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Scaffold(
         body: PageBackground(
           child: SafeArea(
+            bottom: false,
             child: Column(
               children: [
                 // 1. زر "تخطي" في الأعلى (جهة اليسار)
@@ -87,11 +88,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
 
-                const Spacer(flex: 1),
-
                 // 2. منطقة العرض المتحركة (Slider)
-                SizedBox(
-                  height: 500, // مساحة كافية للرسم والنصوص
+                Expanded(
+                  flex: 5,
                   child: PageView.builder(
                     controller: _controller,
                     itemCount: _slides.length,
@@ -123,13 +122,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
 
-                const Spacer(flex: 2),
+                const SizedBox(height: 16),
 
                 // 4. منطقة الأزرار (في الأسفل)
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
-                  child: _buildBottomButtons(),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 30, vertical: 16),
+                    child: _buildBottomButtons(),
+                  ),
                 ),
               ],
             ),

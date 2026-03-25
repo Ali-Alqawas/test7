@@ -166,6 +166,13 @@ class ApiConstants {
   static const String notifications = '/support/notifications/';
   static String markNotificationRead(String id) =>
       '/support/notifications/$id/read/';
+  static const String markAllNotificationsRead =
+      '/support/notifications/mark-all-read/';
+  static const String unreadNotificationCount =
+      '/support/notifications/unread-count/';
+  static String deleteNotification(String id) =>
+      '/support/notifications/$id/delete/';
+  static const String archiveNotifications = '/support/notifications/archive/';
   static const String notificationPreferences =
       '/support/notification-preferences/';
   static const String devices = '/support/devices/';

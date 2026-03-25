@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../data/providers/social_provider.dart';
 import '../helpers/auth_guard.dart';
 import '../theme/app_colors.dart';
+import 'app_toast.dart';
 
 // ============================================================================
 // أزرار اللايك والمفضلة — مربوطة بـ SocialProvider المركزي
@@ -92,10 +93,7 @@ class _OfferActionButtonsState extends State<OfferActionButtons>
         : await social.toggleLike(widget.offerId);
 
     if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('حدث خطأ في الإعجاب، يرجى المحاولة لاحقاً')),
-      );
+      AppToast.error(context, 'حدث خطأ في الإعجاب، يرجى المحاولة لاحقاً');
     }
   }
 
@@ -114,10 +112,7 @@ class _OfferActionButtonsState extends State<OfferActionButtons>
         : await social.toggleFavorite(widget.offerId);
 
     if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('حدث خطأ في المفضلة، يرجى المحاولة لاحقاً')),
-      );
+      AppToast.error(context, 'حدث خطأ في المفضلة، يرجى المحاولة لاحقاً');
     }
   }
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/network/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../data/providers/auth_provider.dart';
@@ -37,16 +39,28 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  int _unreadNotifCount = 0;
+  final ApiService _api = ApiService();
 
-  // =========== أضف هذه الدالة هنا بالضبط ===========
   @override
   void initState() {
     super.initState();
 
-    // تأجيل الاستدعاء حتى يكتمل بناء الشاشة لتجنب أي أخطاء في الـ Context
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<SocialProvider>(context, listen: false).fetchUserSocialData();
+      _fetchUnreadCount();
     });
+  }
+
+  Future<void> _fetchUnreadCount() async {
+    try {
+      final data = await _api.get(ApiConstants.unreadNotificationCount);
+      if (data is Map && mounted) {
+        setState(() {
+          _unreadNotifCount = data['unread_count'] ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -316,10 +330,41 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       actions: [
         IconButton(
-          onPressed: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen())),
-          icon: Icon(Icons.notifications_none_rounded,
-              color: contentColor, size: 28),
+          onPressed: () async {
+            await Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+            _fetchUnreadCount(); // تحديث البادج بعد الرجوع
+          },
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(Icons.notifications_none_rounded,
+                  color: contentColor, size: 28),
+              if (_unreadNotifCount > 0)
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: headerBgColor, width: 1.5),
+                    ),
+                    constraints:
+                        const BoxConstraints(minWidth: 18, minHeight: 18),
+                    child: Text(
+                      _unreadNotifCount > 9 ? '9+' : '$_unreadNotifCount',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         Padding(
           padding: const EdgeInsets.only(right: 16, left: 8),
