@@ -1045,6 +1045,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
             final userName = r['user_name']?.toString() ??
                 r['reporter_name']?.toString() ??
                 'مستخدم';
+            final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(16),
@@ -1072,7 +1073,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen>
                         radius: 20,
                         backgroundColor:
                             AppColors.goldenBronze.withOpacity(0.1),
-                        child: Text(userName[0].toUpperCase(),
+                        child: Text(userInitial,
                             style: const TextStyle(
                                 color: AppColors.goldenBronze,
                                 fontWeight: FontWeight.bold,

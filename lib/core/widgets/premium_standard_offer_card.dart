@@ -286,7 +286,10 @@ class _PremiumStandardOffersSectionState
   // جلب العروض عبر ApiService
   Future<void> _fetchOffers() async {
     try {
-      final params = <String, String>{'page_size': '10'};
+      final params = <String, String>{
+        'page_size': '10',
+        'offer_type': 'Individual'
+      };
       if (widget.storeId != null) params['store'] = widget.storeId!;
       final data = await _api.get(
         ApiConstants.products,

@@ -6,7 +6,8 @@ import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 
 class DrawsScreen extends StatefulWidget {
-  const DrawsScreen({super.key});
+  final String? initialDrawId;
+  const DrawsScreen({super.key, this.initialDrawId});
 
   @override
   State<DrawsScreen> createState() => _DrawsScreenState();
@@ -30,6 +31,23 @@ class _DrawsScreenState extends State<DrawsScreen> {
       setState(() {
         _draws = draws;
         _loading = false;
+      });
+      // إذا جاء من صفحة الحساب بسحب محدد → نعرض تفاصيله تلقائياً
+      if (widget.initialDrawId != null && widget.initialDrawId!.isNotEmpty) {
+        _autoShowDraw(widget.initialDrawId!);
+      }
+    }
+  }
+
+  void _autoShowDraw(String drawId) {
+    final match = _draws
+        .where((d) => (d['draw_id'] ?? d['id'] ?? '').toString() == drawId);
+    if (match.isNotEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final textC = isDark ? AppColors.pureWhite : AppColors.lightText;
+      final cardC = isDark ? const Color(0xFF072A38) : AppColors.pureWhite;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showDrawDetails(match.first, isDark, textC, cardC);
       });
     }
   }

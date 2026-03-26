@@ -499,8 +499,16 @@ class _LoginScreenState extends State<LoginScreen>
                     isDark: isDark,
                     label: "المتابعة مع Google",
                     icon: Icons.g_mobiledata_rounded,
-                    onTap: () {
-                      _showError("تسجيل الدخول عبر جوجل غير مفعل حالياً");
+                    onTap: () async {
+                      final auth = context.read<AuthProvider>();
+                      final success = await auth.loginWithGoogle();
+                      if (!mounted) return;
+                      if (success) {
+                        Navigator.pushReplacement(context,
+                          MaterialPageRoute(builder: (_) => const HomeScreen()));
+                      } else if (auth.errorMessage != null) {
+                        _showError(auth.errorMessage!);
+                      }
                     },
                   ),
                   const SizedBox(height: 12),

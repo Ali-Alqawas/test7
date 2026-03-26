@@ -595,60 +595,64 @@ class _VerificationScreenState extends State<VerificationScreen>
   Widget _buildOtpFields(bool isDark) {
     return Directionality(
       textDirection: TextDirection.ltr,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // حساب عرض الحقل بناءً على المساحة المتاحة
-          final totalMargin = 5 * 8.0; // 5 فراغات بين 6 حقول
-          final boxWidth =
-              ((constraints.maxWidth - totalMargin) / 6).clamp(36.0, 52.0);
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(6, (index) {
-              return Container(
-                width: boxWidth,
-                height: 56,
-                margin: EdgeInsets.only(left: index < 5 ? 8 : 0),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _otpControllers[index].text.isNotEmpty
-                        ? AppColors.goldenBronze
-                        : (isDark
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.grey.shade300),
-                    width: _otpControllers[index].text.isNotEmpty ? 1.5 : 1,
-                  ),
+      child: Row(
+        children: List.generate(11, (i) {
+          // الفهارس الزوجية = حقل OTP، الفهارس الفردية = فراغ بين الحقول
+          if (i.isOdd) return const SizedBox(width: 10);
+          final index = i ~/ 2;
+          return Expanded(
+            child: Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _otpControllers[index].text.isNotEmpty
+                      ? AppColors.goldenBronze
+                      : (isDark
+                          ? Colors.white.withOpacity(0.15)
+                          : Colors.grey.shade300),
+                  width: _otpControllers[index].text.isNotEmpty ? 2 : 1,
                 ),
-                child: TextField(
-                  controller: _otpControllers[index],
-                  focusNode: _focusNodes[index],
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  maxLength: 1,
-                  style: TextStyle(
-                    color: isDark ? AppColors.pureWhite : AppColors.deepNavy,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  decoration: const InputDecoration(
-                    counterText: "",
-                    border: InputBorder.none,
-                  ),
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (value) {
-                    setState(() {});
-                    if (value.isNotEmpty && index < 5) {
-                      _focusNodes[index + 1].requestFocus();
-                    } else if (value.isEmpty && index > 0) {
-                      _focusNodes[index - 1].requestFocus();
-                    }
-                  },
+                boxShadow: _otpControllers[index].text.isNotEmpty
+                    ? [
+                        BoxShadow(
+                          color: AppColors.goldenBronze.withOpacity(0.15),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        )
+                      ]
+                    : null,
+              ),
+              child: TextField(
+                controller: _otpControllers[index],
+                focusNode: _focusNodes[index],
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                maxLength: 1,
+                style: TextStyle(
+                  color: isDark ? AppColors.pureWhite : AppColors.deepNavy,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
                 ),
-              );
-            }),
+                decoration: const InputDecoration(
+                  counterText: "",
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onChanged: (value) {
+                  setState(() {});
+                  if (value.isNotEmpty && index < 5) {
+                    _focusNodes[index + 1].requestFocus();
+                  } else if (value.isEmpty && index > 0) {
+                    _focusNodes[index - 1].requestFocus();
+                  }
+                },
+              ),
+            ),
           );
-        },
+        }),
       ),
     );
   }

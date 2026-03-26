@@ -3,6 +3,7 @@
 // ============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../../core/network/api_service.dart';
 import '../../core/network/api_constants.dart';
 import '../../core/network/api_exceptions.dart';
@@ -155,6 +156,66 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ────────────────────────────────────────────
+
+  // ────────────────────────────────────────────
+  // تسجيل الدخول عبر Google
+  // ────────────────────────────────────────────
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+    serverClientId: '654606397416-jqq0j7826f64m3gbhhp634beth7pqe4h.apps.googleusercontent.com',
+  );
+
+  Future<bool> loginWithGoogle() async {
+    _setLoading(true);
+    _clearError();
+    try {
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        _setLoading(false);
+        return false; // المستخدم ألغى
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        _setError('فشل الحصول على رمز Google');
+        return false;
+      }
+
+      final data = await _api.post(
+        ApiConstants.googleAuth,
+        body: {'id_token': idToken},
+        requiresAuth: false,
+      );
+
+      await TokenManager.saveTokens(
+        accessToken: data['access'],
+        refreshToken: data['refresh'],
+      );
+
+      _isLoggedIn = true;
+      // احفظ اسم Google كـ fallback مؤقت قبل fetchProfile
+      _userProfile = {
+        'full_name': googleUser.displayName ?? googleUser.email,
+        'username': googleUser.email,
+      };
+      notifyListeners();
+      try { await fetchProfile(); } catch (_) {}
+      _hasCompletedInterests = await TokenManager.hasCompletedInterests();
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('فشل تسجيل الدخول عبر Google');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   // إنشاء حساب
   // ────────────────────────────────────────────
 

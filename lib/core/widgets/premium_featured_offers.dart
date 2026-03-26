@@ -36,7 +36,10 @@ class _PremiumFeaturedOffersSectionState
 
   Future<void> _fetchFeaturedOffers() async {
     try {
-      final params = <String, String>{'is_featured': 'true', 'page_size': '6'};
+      final params = <String, String>{
+        'is_featured': 'true',
+        'page_size': '6',
+      };
       if (widget.storeId != null) params['store'] = widget.storeId!;
       final data = await _api.get(
         ApiConstants.products,

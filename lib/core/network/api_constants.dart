@@ -2,14 +2,14 @@
 // ثوابت الـ API — نقطة مركزية واحدة لجميع الـ Endpoints
 // ============================================================================
 
+import '../config/env_config.dart';
+
 class ApiConstants {
-  // ⚠️ تنبيه: غيّر الـ IP حسب جهازك (السيرفر يعمل محلياً)
-  // لينكس/ماك: ifconfig | grep inet
-  // ويندوز: ipconfig
-  static const String baseUrl = 'http://192.168.1.103:8001/api/v1';
+  // المصدر الوحيد للـ URL — غيّره في env_config.dart فقط
+  static const String baseUrl = EnvConfig.baseUrl;
 
   /// عنوان السيرفر الأساسي (بدون /api/v1) — لتركيب روابط الصور
-  static const String mediaBaseUrl = 'http://192.168.1.103:8001';
+  static const String mediaBaseUrl = EnvConfig.mediaBaseUrl;
 
   /// تحويل رابط الصورة إلى رابط كامل قابل للتحميل
   /// يعالج كل الحالات:
@@ -51,6 +51,7 @@ class ApiConstants {
   static const String verifyOtp = '/auth/verify-otp/';
   static const String resendOtp = '/auth/resend-otp/';
   static const String sendOtp = '/auth/send-otp/';
+  static const String googleAuth = '/auth/google/';
   static const String verifyEmail = '/auth/verify-email/';
   static const String passwordResetRequest = '/auth/password-reset/request/';
   static const String passwordResetConfirm = '/auth/password-reset/confirm/';
