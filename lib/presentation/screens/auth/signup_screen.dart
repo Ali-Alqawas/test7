@@ -262,6 +262,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_textfield.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 import 'login_screen.dart';
 import 'verification_screen.dart';
@@ -316,16 +317,12 @@ class _SignUpScreenState extends State<SignUpScreen>
     if (_nameController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى تعبئة جميع الحقول المطلوبة')),
-      );
+      AppToast.warning(context, 'يرجى تعبئة جميع الحقول المطلوبة');
       return;
     }
 
     if (_passwordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('كلمات المرور غير متطابقة')),
-      );
+      AppToast.warning(context, 'كلمات المرور غير متطابقة');
       return;
     }
 
@@ -341,11 +338,7 @@ class _SignUpScreenState extends State<SignUpScreen>
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('تم إنشاء الحساب بنجاح!'),
-            backgroundColor: Colors.green),
-      );
+      AppToast.success(context, 'تم إنشاء الحساب بنجاح!');
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -355,11 +348,7 @@ class _SignUpScreenState extends State<SignUpScreen>
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(authProvider.errorMessage ?? 'فشل إنشاء الحساب'),
-            backgroundColor: Colors.red),
-      );
+      AppToast.error(context, authProvider.errorMessage ?? 'فشل إنشاء الحساب');
     }
   }
 

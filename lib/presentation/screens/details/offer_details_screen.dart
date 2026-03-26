@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/network/api_constants.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/widgets/offer_action_buttons.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../core/helpers/auth_guard.dart';
 import '../../../data/providers/social_provider.dart';
 import 'all_comments_screen.dart';
@@ -202,8 +203,10 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
       _fetchProductDetails();
       _trackView();
     }
-    // جلب عروض مشابهة دائماً (حتى للباقات)
-    if (_categoryId > 0) {
+    // جلب عروض مشابهة فقط للعروض العادية والمميزة (ليس للباقات أو البروشورات)
+    if (!_isBundled &&
+        !_isBrochure &&
+        (_categoryId > 0 || _storeId.isNotEmpty)) {
       _fetchSimilarOffers();
     }
   }
@@ -232,13 +235,20 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
   }
 
   Future<void> _fetchSimilarOffers() async {
-    if (_categoryId == 0) return;
+    // للباقات: لا يوجد category، نستخدم المتجر كبديل
+    if (_categoryId == 0 && _storeId.isEmpty) return;
     setState(() => _loadingSimilar = true);
     try {
       final api = ApiService();
+      final params = <String, String>{'page_size': '6'};
+      if (_categoryId > 0) {
+        params['category'] = '$_categoryId';
+      } else if (_storeId.isNotEmpty) {
+        params['store'] = _storeId;
+      }
       final data = await api.get(
         ApiConstants.products,
-        queryParams: {'category': '$_categoryId', 'page_size': '6'},
+        queryParams: params,
         requiresAuth: false,
       );
       final List raw =
@@ -286,6 +296,17 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
           if (_size.isEmpty) _size = (data['size'] ?? '').toString().trim();
           if (_weight.isEmpty)
             _weight = (data['weight'] ?? '').toString().trim();
+
+          // إثراء الصور من الـ API (خاصة للبروشورات والمنتجات العادية)
+          if (data['images'] is List && (data['images'] as List).isNotEmpty) {
+            final apiImages = (data['images'] as List)
+                .map((e) => _extractImageUrl(e))
+                .where((url) => url.isNotEmpty && !url.contains('No+Image'))
+                .toList();
+            if (apiImages.isNotEmpty) {
+              _images = apiImages;
+            }
+          }
         });
         _fetchSimilarOffers();
       }
@@ -392,13 +413,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSending = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("فشل إرسال التعليق",
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.error(context, 'فشل إرسال التعليق');
       }
     }
   }
@@ -619,8 +634,8 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
           // ======== التعليقات ========
           _buildCommentsPreview(isDark, textC, cardBg),
 
-          // ======== عروض مشابهة ========
-          if (!_isBrochure) ...[
+          // ======== عروض مشابهة (فقط للعادية والمميزة) ========
+          if (!_isBrochure && !_isBundled) ...[
             const SizedBox(height: 20),
             _buildSimilarOffers(isDark, textC),
           ],
@@ -1510,11 +1525,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                       _supportAction(Icons.help_outline_rounded,
                           "الأسئلة الشائعة", isDark, textC, () {
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('قريبا..'),
-                              duration: Duration(seconds: 1)),
-                        );
+                        AppToast.info(context, 'قريبا..');
                       }),
                     ]))));
   }
@@ -1625,19 +1636,11 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                       'description': ctrl.text.trim(),
                     });
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('تم إرسال رسالتك بنجاح'),
-                            backgroundColor: Color(0xFF4CAF50)),
-                      );
+                      AppToast.success(context, 'تم إرسال رسالتك بنجاح');
                     }
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text('فشل الإرسال: $e'),
-                            backgroundColor: AppColors.error),
-                      );
+                      AppToast.error(context, 'فشل الإرسال: $e');
                     }
                   }
                 },
@@ -1738,19 +1741,11 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                     }
                     await api.post(ApiConstants.reports, body: body);
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('تم إرسال البلاغ بنجاح'),
-                            backgroundColor: Color(0xFF4CAF50)),
-                      );
+                      AppToast.success(context, 'تم إرسال البلاغ بنجاح');
                     }
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text('فشل الإرسال: $e'),
-                            backgroundColor: AppColors.error),
-                      );
+                      AppToast.error(context, 'فشل الإرسال: $e');
                     }
                   }
                 },

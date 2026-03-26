@@ -314,6 +314,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_textfield.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 import '../home/home_screen.dart';
 import 'signup_screen.dart';
@@ -376,11 +377,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('تم تسجيل الدخول بنجاح!'),
-            backgroundColor: Colors.green),
-      );
+      AppToast.success(context, 'تم تسجيل الدخول بنجاح!');
 
       // مستخدم قديم (أكمل الاهتمامات) → الرئيسية مباشرة
       // مستخدم جديد (لم يكمل الاهتمامات) → شاشة الاهتمامات
@@ -400,9 +397,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _showError(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
-      );
+      AppToast.error(context, message);
     }
   }
 
@@ -504,8 +499,16 @@ class _LoginScreenState extends State<LoginScreen>
                     isDark: isDark,
                     label: "المتابعة مع Google",
                     icon: Icons.g_mobiledata_rounded,
-                    onTap: () {
-                      _showError("تسجيل الدخول عبر جوجل غير مفعل حالياً");
+                    onTap: () async {
+                      final auth = context.read<AuthProvider>();
+                      final success = await auth.loginWithGoogle();
+                      if (!mounted) return;
+                      if (success) {
+                        Navigator.pushReplacement(context,
+                          MaterialPageRoute(builder: (_) => const HomeScreen()));
+                      } else if (auth.errorMessage != null) {
+                        _showError(auth.errorMessage!);
+                      }
                     },
                   ),
                   const SizedBox(height: 12),

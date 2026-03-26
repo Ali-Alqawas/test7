@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -63,21 +64,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _saving = false);
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text("تم حفظ التعديلات بنجاح ✓"),
-        backgroundColor: AppColors.goldenBronze,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      AppToast.success(context, 'تم حفظ التعديلات بنجاح ✓');
       Navigator.pop(context);
     } else {
       final error = auth.errorMessage ?? 'حدث خطأ أثناء الحفظ';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(error),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      AppToast.error(context, error);
     }
   }
 

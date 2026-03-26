@@ -375,6 +375,7 @@ import '../../../core/network/token_manager.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../home/home_screen.dart';
 
 class InterestsScreen extends StatefulWidget {
@@ -501,11 +502,8 @@ class _InterestsScreenState extends State<InterestsScreen>
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('تم الحفظ! جاري الانتقال للرئيسية...'),
-          backgroundColor: Colors.green),
-    );
+    ScaffoldMessenger.of(context).clearSnackBars();
+    AppToast.success(context, 'تم الحفظ! جاري الانتقال للرئيسية...');
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -515,9 +513,7 @@ class _InterestsScreenState extends State<InterestsScreen>
 
   void _showError(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
-      );
+      AppToast.error(context, message);
     }
   }
 

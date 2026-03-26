@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/api_constants.dart';
 import '../../../core/theme/theme_manager.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
 import 'saved_addresses_screen.dart';
@@ -485,14 +487,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (code.isNotEmpty) {
                       Clipboard.setData(ClipboardData(text: code));
                     }
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(code.isNotEmpty
-                            ? "تم نسخ رابط الإحالة: $code ✓"
-                            : "تم نسخ رابط الإحالة ✓"),
-                        backgroundColor: AppColors.goldenBronze,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12))));
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    AppToast.success(
+                        context,
+                        code.isNotEmpty
+                            ? 'تم نسخ رابط الإحالة: $code ✓'
+                            : 'تم نسخ رابط الإحالة ✓');
                   },
                   child: Container(
                     padding:
@@ -553,10 +553,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       itemBuilder: (_, i) {
                         final d = _draws[i];
                         final title = d['name'] ?? 'سحب';
-                        final image = '';
+                        final drawImage =
+                            (d['image_url'] ?? d['image'])?.toString() ?? '';
+                        final resolvedImage = drawImage.isNotEmpty
+                            ? ApiConstants.resolveImageUrl(drawImage)
+                            : '';
                         final pts = '${d['points_required'] ?? 0} نقطة';
+                        final drawId =
+                            (d['draw_id'] ?? d['id'] ?? '').toString();
                         return GestureDetector(
-                          onTap: () => _push(context, const DrawsScreen()),
+                          onTap: () => _push(
+                              context, DrawsScreen(initialDrawId: drawId)),
                           child: Container(
                             width: 130,
                             margin: const EdgeInsets.only(left: 12),
@@ -570,11 +577,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   child: ClipRRect(
                                 borderRadius: const BorderRadius.vertical(
                                     top: Radius.circular(15)),
-                                child: image.toString().isNotEmpty
+                                child: resolvedImage.isNotEmpty
                                     ? Image.network(
-                                        image.toString().startsWith('http')
-                                            ? image
-                                            : 'http://192.168.1.103:8001$image',
+                                        resolvedImage,
                                         fit: BoxFit.cover,
                                         width: double.infinity,
                                         errorBuilder: (_, __, ___) => Container(

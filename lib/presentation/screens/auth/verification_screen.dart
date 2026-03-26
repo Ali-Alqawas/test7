@@ -338,6 +338,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 import 'login_screen.dart';
 
@@ -407,10 +408,7 @@ class _VerificationScreenState extends State<VerificationScreen>
     String otp = _otpControllers.map((c) => c.text).join();
 
     if (otp.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('الرجاء إدخال الرمز المكون من 6 أرقام بالكامل')),
-      );
+      AppToast.warning(context, 'الرجاء إدخال الرمز المكون من 6 أرقام بالكامل');
       return;
     }
 
@@ -421,11 +419,7 @@ class _VerificationScreenState extends State<VerificationScreen>
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('تم التحقق بنجاح! يمكنك الآن تسجيل الدخول'),
-            backgroundColor: Colors.green),
-      );
+      AppToast.success(context, 'تم التحقق بنجاح! يمكنك الآن تسجيل الدخول');
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -443,11 +437,7 @@ class _VerificationScreenState extends State<VerificationScreen>
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('تم إعادة إرسال الرمز بنجاح'),
-            backgroundColor: Colors.green),
-      );
+      AppToast.success(context, 'تم إعادة إرسال الرمز بنجاح');
       _startTimer();
     } else {
       _showError(authProvider.errorMessage ?? 'فشل إعادة إرسال الرمز');
@@ -456,9 +446,7 @@ class _VerificationScreenState extends State<VerificationScreen>
 
   void _showError(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
-      );
+      AppToast.error(context, message);
     }
   }
 
@@ -608,48 +596,60 @@ class _VerificationScreenState extends State<VerificationScreen>
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(6, (index) {
-          return Container(
-            width: 48,
-            height: 56,
-            margin: EdgeInsets.only(left: index < 5 ? 8 : 0),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _otpControllers[index].text.isNotEmpty
-                    ? AppColors.goldenBronze
-                    : (isDark
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.grey.shade300),
-                width: _otpControllers[index].text.isNotEmpty ? 1.5 : 1,
+        children: List.generate(11, (i) {
+          // الفهارس الزوجية = حقل OTP، الفهارس الفردية = فراغ بين الحقول
+          if (i.isOdd) return const SizedBox(width: 10);
+          final index = i ~/ 2;
+          return Expanded(
+            child: Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _otpControllers[index].text.isNotEmpty
+                      ? AppColors.goldenBronze
+                      : (isDark
+                          ? Colors.white.withOpacity(0.15)
+                          : Colors.grey.shade300),
+                  width: _otpControllers[index].text.isNotEmpty ? 2 : 1,
+                ),
+                boxShadow: _otpControllers[index].text.isNotEmpty
+                    ? [
+                        BoxShadow(
+                          color: AppColors.goldenBronze.withOpacity(0.15),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        )
+                      ]
+                    : null,
               ),
-            ),
-            child: TextField(
-              controller: _otpControllers[index],
-              focusNode: _focusNodes[index],
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              maxLength: 1,
-              style: TextStyle(
-                color: isDark ? AppColors.pureWhite : AppColors.deepNavy,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+              child: TextField(
+                controller: _otpControllers[index],
+                focusNode: _focusNodes[index],
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                maxLength: 1,
+                style: TextStyle(
+                  color: isDark ? AppColors.pureWhite : AppColors.deepNavy,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+                decoration: const InputDecoration(
+                  counterText: "",
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onChanged: (value) {
+                  setState(() {});
+                  if (value.isNotEmpty && index < 5) {
+                    _focusNodes[index + 1].requestFocus();
+                  } else if (value.isEmpty && index > 0) {
+                    _focusNodes[index - 1].requestFocus();
+                  }
+                },
               ),
-              decoration: const InputDecoration(
-                counterText: "",
-                border: InputBorder.none,
-              ),
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onChanged: (value) {
-                setState(() {});
-                if (value.isNotEmpty && index < 5) {
-                  _focusNodes[index + 1].requestFocus();
-                } else if (value.isEmpty && index > 0) {
-                  _focusNodes[index - 1].requestFocus();
-                }
-              },
             ),
           );
         }),

@@ -242,6 +242,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_textfield.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 import 'login_screen.dart';
 import 'reset_password_screen.dart';
@@ -298,11 +299,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('تم إرسال رمز التحقق إلى بريدك!'),
-            backgroundColor: Colors.green),
-      );
+      AppToast.success(context, 'تم إرسال رمز التحقق إلى بريدك!');
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => ResetPasswordScreen(email: email)),
@@ -314,9 +311,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+    AppToast.error(context, message);
   }
 
   @override

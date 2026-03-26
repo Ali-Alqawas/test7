@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/api_constants.dart';
 
@@ -122,12 +123,7 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
       debugPrint('خطأ إرسال الرسالة: $e');
       if (mounted) {
         setState(() => _isSending = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("فشل إرسال الرسالة"),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.error(context, 'فشل إرسال الرسالة');
       }
     }
   }

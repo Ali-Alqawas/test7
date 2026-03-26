@@ -5,6 +5,7 @@ import '../../../core/theme/theme_manager.dart';
 import '../../../core/network/api_constants.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/helpers/auth_guard.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/providers/auth_provider.dart';
 
 class AllCommentsScreen extends StatefulWidget {
@@ -88,27 +89,13 @@ class _AllCommentsScreenState extends State<AllCommentsScreen> {
         if (result != null) {
           _commentController.clear();
           _fetchComments();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  "\u062a\u0645 \u0625\u0636\u0627\u0641\u0629 \u062a\u0639\u0644\u064a\u0642\u0643 \u2705",
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              backgroundColor: Color(0xFF4CAF50),
-            ),
-          );
+          AppToast.success(context, 'تم إضافة تعليقك ✅');
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSending = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                "\u0641\u0634\u0644 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062a\u0639\u0644\u064a\u0642",
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.error(context, 'فشل إرسال التعليق');
       }
     }
   }
@@ -146,21 +133,9 @@ class _AllCommentsScreenState extends State<AllCommentsScreen> {
     if (mounted) {
       if (success) {
         _fetchComments();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("تم حذف التعليق",
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            backgroundColor: AppColors.goldenBronze,
-          ),
-        );
+        AppToast.success(context, 'تم حذف التعليق');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("فشل حذف التعليق",
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.error(context, 'فشل حذف التعليق');
       }
     }
   }
